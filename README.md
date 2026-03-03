@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <strong>A CPU where every ALU operation is a trained neural network.</strong><br>
+  <strong>A CPU that runs entirely on GPU — registers, memory, flags, and program counter are all tensors.<br>Every ALU operation is a trained neural network.</strong><br>
   Addition uses Kogge-Stone carry-lookahead. Multiplication uses a learned byte-pair lookup table.<br>
   Bitwise ops use neural truth tables. Shifts use attention-based bit routing. No hardcoded arithmetic.
 </p>
@@ -35,7 +35,9 @@ python main.py --binary firmware.bin --fast
 
 ## How It Works
 
-Every ALU operation routes through a trained `.pt` model:
+The entire CPU lives on GPU. Registers, memory, flags, and the program counter are
+PyTorch tensors. Instruction decode, ALU dispatch, and state updates all happen on-device
+— nothing round-trips to the host CPU. Every ALU operation routes through a trained `.pt` model:
 
 | Instruction | Neural Model | How It Works |
 |-------------|-------------|--------------|
@@ -119,11 +121,23 @@ lookups (~21 us), O(log n) parallel-prefix carry (~248 us), and O(n) sequential 
 
 See the [research paper](paper/ncpu_paper.md) for detailed analysis.
 
-## Two Execution Modes
+## GPU-Native Architecture
 
-### Neural Mode (default)
-All ALU operations pass through trained neural networks. Every add, subtract, multiply,
-compare, and bitwise op is computed by model inference. This is the "fully neural CPU."
+The NeuralCPU is not a simulator that happens to use a GPU — it **is** a GPU program.
+All CPU state lives permanently on-device as PyTorch tensors:
+
+- **Registers**: `torch.zeros(31, dtype=torch.int64, device='mps')`
+- **Memory**: `torch.zeros(memory_size, dtype=torch.uint8, device='mps')`
+- **Flags**: N, Z, C, V as GPU-resident tensors
+- **Program Counter**: GPU tensor, incremented on-device
+
+Instruction fetch, decode, execute, and writeback all happen on GPU. The ALU is a bank
+of trained neural networks running as GPU inference. No CPU-side arithmetic in the
+execution loop.
+
+### Two Execution Modes
+
+**Neural Mode** (default) — Every ALU operation is a forward pass through a trained `.pt` model:
 
 ```python
 from ncpu.model import CPU
@@ -133,10 +147,8 @@ cpu.run()
 print(cpu.get_register("R2"))  # 42 (computed by neural byte-pair LUT)
 ```
 
-### Fast Mode (--fast)
-GPU tensor execution with native arithmetic. Registers, memory, flags, PC — all
-PyTorch tensors on GPU. Same NeuralCPU, but ALU uses `torch.add` instead of model
-inference. For when you want maximum IPS.
+**Fast Mode** (`--fast`) — Same GPU-resident architecture, but ALU uses `torch.add`/`torch.mul`
+instead of model inference. For maximum IPS:
 
 ```python
 from ncpu.neural import NeuralCPU
