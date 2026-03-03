@@ -43,7 +43,7 @@ PyTorch tensors. Instruction decode, ALU dispatch, and state updates all happen 
 |-------------|-------------|--------------|
 | `ADD R0, R1, R2` | arithmetic.pt + carry_combine.pt | Kogge-Stone CLA (8 neural passes) |
 | `SUB R0, R1, R2` | arithmetic.pt + carry_combine.pt | Two's complement + CLA |
-| `MUL R0, R1, R2` | multiply.pt | Up to 16 byte-pair LUT lookups |
+| `MUL R0, R1, R2` | multiply.pt | Byte-pair LUT lookups (up to 64 pairs for 64-bit) |
 | `DIV R0, R1, R2` | arithmetic.pt | Restoring division via neural subtraction |
 | `AND R0, R1, R2` | logical.pt | Vectorized truth table (all 32 bits at once) |
 | `OR R0, R1, R2` | logical.pt | Vectorized truth table |
@@ -126,13 +126,14 @@ See the [research paper](paper/ncpu_paper.md) for detailed analysis.
 The NeuralCPU is not a simulator that happens to use a GPU — it **is** a GPU program.
 All CPU state lives permanently on-device as PyTorch tensors:
 
-- **Registers**: `torch.zeros(31, dtype=torch.int64, device='mps')`
-- **Memory**: `torch.zeros(memory_size, dtype=torch.uint8, device='mps')`
+- **Registers**: 31 x 64-bit (`torch.int64` on GPU)
+- **Memory**: Flat byte-addressable (`torch.uint8` on GPU)
 - **Flags**: N, Z, C, V as GPU-resident tensors
 - **Program Counter**: GPU tensor, incremented on-device
 
+The CPU is 64-bit ARM64. Registers, addresses, and data paths are all 64-bit.
 Instruction fetch, decode, execute, and writeback all happen on GPU. The ALU is a bank
-of trained neural networks running as GPU inference. No CPU-side arithmetic in the
+of trained neural networks running as GPU inference. No host CPU arithmetic in the
 execution loop.
 
 ### Two Execution Modes
