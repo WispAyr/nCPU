@@ -1,252 +1,181 @@
 """Tests for CPURegistry primitives."""
 
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-
 import pytest
-from kvrm_cpu.state import CPUState, create_initial_state
-from kvrm_cpu.registry import CPURegistry, get_registry
+from ncpu.model.state import CPUState
+from ncpu.model.registry import get_registry
 
 
-class TestRegistryInitialization:
-    """Test registry creation and freezing."""
-
-    def test_registry_is_frozen(self):
-        """Registry is frozen after initialization."""
-        registry = get_registry()
-        assert registry.is_frozen() is True
+class TestRegistryInit:
+    def test_is_frozen(self):
+        assert get_registry().is_frozen() is True
 
     def test_cannot_register_after_freeze(self):
-        """Cannot add primitives after freeze."""
-        registry = get_registry()
         with pytest.raises(RuntimeError):
-            registry.register("OP_NEW", lambda s, p: s)
+            get_registry().register("OP_NEW", lambda s, p: s)
 
     def test_valid_keys(self):
-        """All expected keys are registered."""
-        registry = get_registry()
-        keys = registry.get_valid_keys()
         expected = {
             "OP_MOV_REG_IMM", "OP_MOV_REG_REG",
-            "OP_ADD", "OP_SUB", "OP_MUL",
+            "OP_ADD", "OP_SUB", "OP_MUL", "OP_DIV",
+            "OP_AND", "OP_OR", "OP_XOR",
+            "OP_SHL", "OP_SHR",
             "OP_INC", "OP_DEC",
             "OP_CMP",
             "OP_JMP", "OP_JZ", "OP_JNZ", "OP_JS", "OP_JNS",
             "OP_HALT", "OP_NOP", "OP_INVALID"
         }
-        assert keys == expected
+        assert get_registry().get_valid_keys() == expected
 
 
-class TestDataMovementPrimitives:
-    """Test MOV operations."""
-
+class TestDataMovement:
     def test_mov_reg_imm(self):
-        """OP_MOV_REG_IMM loads immediate into register."""
-        registry = get_registry()
-        state = CPUState()
-
-        new_state = registry.execute(state, "OP_MOV_REG_IMM", {
-            "dest": "R0", "value": 42
-        })
-
-        assert new_state.registers["R0"] == 42
-        assert new_state.pc == 1  # PC incremented
-        assert new_state.cycle_count == 1
+        s = get_registry().execute(CPUState(), "OP_MOV_REG_IMM", {"dest": "R0", "value": 42})
+        assert s.registers["R0"] == 42 and s.pc == 1 and s.cycle_count == 1
 
     def test_mov_reg_reg(self):
-        """OP_MOV_REG_REG copies register to register."""
-        registry = get_registry()
-        state = CPUState()
-        state = state.set_register("R1", 99)
-
-        new_state = registry.execute(state, "OP_MOV_REG_REG", {
-            "dest": "R0", "src": "R1"
-        })
-
-        assert new_state.registers["R0"] == 99
-        assert new_state.registers["R1"] == 99  # Source unchanged
+        state = CPUState().set_register("R1", 99)
+        s = get_registry().execute(state, "OP_MOV_REG_REG", {"dest": "R0", "src": "R1"})
+        assert s.registers["R0"] == 99 and s.registers["R1"] == 99
 
 
-class TestArithmeticPrimitives:
-    """Test ADD, SUB, MUL operations."""
-
+class TestArithmetic:
     def test_add(self):
-        """OP_ADD adds two registers."""
-        registry = get_registry()
-        state = CPUState()
-        state = state.set_register("R1", 10)
-        state = state.set_register("R2", 20)
-
-        new_state = registry.execute(state, "OP_ADD", {
-            "dest": "R0", "src1": "R1", "src2": "R2"
-        })
-
-        assert new_state.registers["R0"] == 30
+        state = CPUState().set_register("R1", 10).set_register("R2", 20)
+        s = get_registry().execute(state, "OP_ADD", {"dest": "R0", "src1": "R1", "src2": "R2"})
+        assert s.registers["R0"] == 30
 
     def test_sub(self):
-        """OP_SUB subtracts src2 from src1."""
-        registry = get_registry()
-        state = CPUState()
-        state = state.set_register("R1", 100)
-        state = state.set_register("R2", 40)
-
-        new_state = registry.execute(state, "OP_SUB", {
-            "dest": "R0", "src1": "R1", "src2": "R2"
-        })
-
-        assert new_state.registers["R0"] == 60
+        state = CPUState().set_register("R1", 100).set_register("R2", 40)
+        s = get_registry().execute(state, "OP_SUB", {"dest": "R0", "src1": "R1", "src2": "R2"})
+        assert s.registers["R0"] == 60
 
     def test_mul(self):
-        """OP_MUL multiplies two registers."""
-        registry = get_registry()
-        state = CPUState()
-        state = state.set_register("R1", 7)
-        state = state.set_register("R2", 6)
+        state = CPUState().set_register("R1", 7).set_register("R2", 6)
+        s = get_registry().execute(state, "OP_MUL", {"dest": "R0", "src1": "R1", "src2": "R2"})
+        assert s.registers["R0"] == 42
 
-        new_state = registry.execute(state, "OP_MUL", {
-            "dest": "R0", "src1": "R1", "src2": "R2"
-        })
+    def test_div(self):
+        state = CPUState().set_register("R1", 42).set_register("R2", 7)
+        s = get_registry().execute(state, "OP_DIV", {"dest": "R0", "src1": "R1", "src2": "R2"})
+        assert s.registers["R0"] == 6
 
-        assert new_state.registers["R0"] == 42
+    def test_div_by_zero(self):
+        state = CPUState().set_register("R1", 42).set_register("R2", 0)
+        s = get_registry().execute(state, "OP_DIV", {"dest": "R0", "src1": "R1", "src2": "R2"})
+        assert s.registers["R0"] == 0
+
+    def test_inc(self):
+        state = CPUState().set_register("R0", 10)
+        s = get_registry().execute(state, "OP_INC", {"dest": "R0"})
+        assert s.registers["R0"] == 11
+
+    def test_dec(self):
+        state = CPUState().set_register("R0", 10)
+        s = get_registry().execute(state, "OP_DEC", {"dest": "R0"})
+        assert s.registers["R0"] == 9
 
 
-class TestComparisonPrimitive:
-    """Test CMP operation."""
+class TestBitwise:
+    def test_and(self):
+        state = CPUState().set_register("R1", 0xFF).set_register("R2", 0x0F)
+        s = get_registry().execute(state, "OP_AND", {"dest": "R0", "src1": "R1", "src2": "R2"})
+        assert s.registers["R0"] == 0x0F
 
+    def test_or(self):
+        state = CPUState().set_register("R1", 0xF0).set_register("R2", 0x0F)
+        s = get_registry().execute(state, "OP_OR", {"dest": "R0", "src1": "R1", "src2": "R2"})
+        assert s.registers["R0"] == 0xFF
+
+    def test_xor(self):
+        state = CPUState().set_register("R1", 0xFF).set_register("R2", 0xFF)
+        s = get_registry().execute(state, "OP_XOR", {"dest": "R0", "src1": "R1", "src2": "R2"})
+        assert s.registers["R0"] == 0
+
+    def test_xor_nonzero(self):
+        state = CPUState().set_register("R1", 0xFF).set_register("R2", 0x0F)
+        s = get_registry().execute(state, "OP_XOR", {"dest": "R0", "src1": "R1", "src2": "R2"})
+        assert s.registers["R0"] == 0xF0
+
+
+class TestShifts:
+    def test_shl_immediate(self):
+        state = CPUState().set_register("R1", 1)
+        s = get_registry().execute(state, "OP_SHL", {"dest": "R0", "src": "R1", "amount": 3})
+        assert s.registers["R0"] == 8
+
+    def test_shr_immediate(self):
+        state = CPUState().set_register("R1", 16)
+        s = get_registry().execute(state, "OP_SHR", {"dest": "R0", "src": "R1", "amount": 2})
+        assert s.registers["R0"] == 4
+
+    def test_shl_register(self):
+        state = CPUState().set_register("R1", 1).set_register("R2", 4)
+        s = get_registry().execute(state, "OP_SHL", {"dest": "R0", "src": "R1", "amount_reg": "R2"})
+        assert s.registers["R0"] == 16
+
+    def test_shr_register(self):
+        state = CPUState().set_register("R1", 256).set_register("R2", 4)
+        s = get_registry().execute(state, "OP_SHR", {"dest": "R0", "src": "R1", "amount_reg": "R2"})
+        assert s.registers["R0"] == 16
+
+
+class TestComparison:
     def test_cmp_equal(self):
-        """OP_CMP sets ZF when equal."""
-        registry = get_registry()
-        state = CPUState()
-        state = state.set_register("R1", 50)
-        state = state.set_register("R2", 50)
-
-        new_state = registry.execute(state, "OP_CMP", {
-            "src1": "R1", "src2": "R2"
-        })
-
-        assert new_state.flags["ZF"] is True
-        assert new_state.flags["SF"] is False
+        state = CPUState().set_register("R1", 50).set_register("R2", 50)
+        s = get_registry().execute(state, "OP_CMP", {"src1": "R1", "src2": "R2"})
+        assert s.flags["ZF"] is True and s.flags["SF"] is False
 
     def test_cmp_less(self):
-        """OP_CMP sets SF when src1 < src2."""
-        registry = get_registry()
-        state = CPUState()
-        state = state.set_register("R1", 10)
-        state = state.set_register("R2", 50)
-
-        new_state = registry.execute(state, "OP_CMP", {
-            "src1": "R1", "src2": "R2"
-        })
-
-        assert new_state.flags["ZF"] is False
-        assert new_state.flags["SF"] is True
+        state = CPUState().set_register("R1", 10).set_register("R2", 50)
+        s = get_registry().execute(state, "OP_CMP", {"src1": "R1", "src2": "R2"})
+        assert s.flags["ZF"] is False and s.flags["SF"] is True
 
     def test_cmp_greater(self):
-        """OP_CMP clears flags when src1 > src2."""
-        registry = get_registry()
-        state = CPUState()
-        state = state.set_register("R1", 100)
-        state = state.set_register("R2", 50)
-
-        new_state = registry.execute(state, "OP_CMP", {
-            "src1": "R1", "src2": "R2"
-        })
-
-        assert new_state.flags["ZF"] is False
-        assert new_state.flags["SF"] is False
+        state = CPUState().set_register("R1", 100).set_register("R2", 50)
+        s = get_registry().execute(state, "OP_CMP", {"src1": "R1", "src2": "R2"})
+        assert s.flags["ZF"] is False and s.flags["SF"] is False
 
 
-class TestControlFlowPrimitives:
-    """Test JMP, JZ, JNZ operations."""
-
+class TestControlFlow:
     def test_jmp(self):
-        """OP_JMP sets PC unconditionally."""
-        registry = get_registry()
-        state = CPUState()
-
-        new_state = registry.execute(state, "OP_JMP", {"addr": 5})
-
-        assert new_state.pc == 5
+        assert get_registry().execute(CPUState(), "OP_JMP", {"addr": 5}).pc == 5
 
     def test_jz_when_zero(self):
-        """OP_JZ jumps when ZF is set."""
-        registry = get_registry()
         state = CPUState(flags={"ZF": True, "SF": False})
-
-        new_state = registry.execute(state, "OP_JZ", {"addr": 10})
-
-        assert new_state.pc == 10
+        assert get_registry().execute(state, "OP_JZ", {"addr": 10}).pc == 10
 
     def test_jz_when_not_zero(self):
-        """OP_JZ falls through when ZF is clear."""
-        registry = get_registry()
         state = CPUState(flags={"ZF": False, "SF": False})
-
-        new_state = registry.execute(state, "OP_JZ", {"addr": 10})
-
-        assert new_state.pc == 1  # PC incremented
+        assert get_registry().execute(state, "OP_JZ", {"addr": 10}).pc == 1
 
     def test_jnz_when_not_zero(self):
-        """OP_JNZ jumps when ZF is clear."""
-        registry = get_registry()
         state = CPUState(flags={"ZF": False, "SF": False})
-
-        new_state = registry.execute(state, "OP_JNZ", {"addr": 10})
-
-        assert new_state.pc == 10
+        assert get_registry().execute(state, "OP_JNZ", {"addr": 10}).pc == 10
 
     def test_jnz_when_zero(self):
-        """OP_JNZ falls through when ZF is set."""
-        registry = get_registry()
         state = CPUState(flags={"ZF": True, "SF": False})
+        assert get_registry().execute(state, "OP_JNZ", {"addr": 10}).pc == 1
 
-        new_state = registry.execute(state, "OP_JNZ", {"addr": 10})
+    def test_js_when_negative(self):
+        state = CPUState(flags={"ZF": False, "SF": True})
+        assert get_registry().execute(state, "OP_JS", {"addr": 5}).pc == 5
 
-        assert new_state.pc == 1
+    def test_jns_when_positive(self):
+        state = CPUState(flags={"ZF": False, "SF": False})
+        assert get_registry().execute(state, "OP_JNS", {"addr": 5}).pc == 5
 
 
-class TestSpecialPrimitives:
-    """Test HALT, NOP, INVALID operations."""
-
+class TestSpecial:
     def test_halt(self):
-        """OP_HALT sets halted flag."""
-        registry = get_registry()
-        state = CPUState()
-
-        new_state = registry.execute(state, "OP_HALT", {})
-
-        assert new_state.halted is True
+        assert get_registry().execute(CPUState(), "OP_HALT", {}).halted is True
 
     def test_nop(self):
-        """OP_NOP only increments PC."""
-        registry = get_registry()
-        state = CPUState()
-        state = state.set_register("R0", 42)
-
-        new_state = registry.execute(state, "OP_NOP", {})
-
-        assert new_state.pc == 1
-        assert new_state.registers["R0"] == 42  # Unchanged
+        s = get_registry().execute(CPUState().set_register("R0", 42), "OP_NOP", {})
+        assert s.pc == 1 and s.registers["R0"] == 42
 
     def test_invalid(self):
-        """OP_INVALID halts execution."""
-        registry = get_registry()
-        state = CPUState()
-
-        new_state = registry.execute(state, "OP_INVALID", {"raw": "BADOP"})
-
-        assert new_state.halted is True
-
-
-class TestUnknownKey:
-    """Test error handling for unknown keys."""
+        assert get_registry().execute(CPUState(), "OP_INVALID", {"raw": "BADOP"}).halted is True
 
     def test_unknown_key_raises(self):
-        """Unknown operation key raises KeyError."""
-        registry = get_registry()
-        state = CPUState()
-
         with pytest.raises(KeyError):
-            registry.execute(state, "OP_UNKNOWN", {})
+            get_registry().execute(CPUState(), "OP_UNKNOWN", {})

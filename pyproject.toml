@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "ncpu"
+version = "0.2.0"
+description = "Neural CPU: every CPU component replaced by trained neural networks"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [{name = "Robert Price"}]
+
+dependencies = []
+
+[project.optional-dependencies]
+neural = [
+    "torch>=2.0.0",
+    "numpy",
+]
+model = [
+    "torch>=2.0.0",
+    "transformers>=4.35.0",
+    "peft>=0.6.0",
+]
+tensor = [
+    "torch>=2.0.0",
+]
+train = [
+    "torch>=2.0.0",
+    "transformers>=4.35.0",
+    "peft>=0.6.0",
+    "datasets>=2.14.0",
+    "accelerate>=0.24.0",
+]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+
+[tool.setuptools.packages.find]
+include = ["ncpu*"]

@@ -1,336 +1,185 @@
-# KVRM-CPU Architecture
+# nCPU Architecture
 
-A model-native CPU emulator demonstrating the KVRM paradigm at the lowest level of computing.
+A CPU where every component is a trained neural network.
 
-## Overview
+## System Overview
 
-KVRM-CPU replaces traditional hardcoded instruction decode logic with a semantic LLM-based decoder that emits verified registry keys. This proves that even the most fundamental computing operations can be handled through the KVRM (Key-Value Response Mapping) pattern.
-
-### Traditional CPU vs KVRM-CPU
+nCPU has two execution modes, both GPU-native:
 
 ```
-Traditional CPU:  MEMORY → FETCH → DECODE → EXECUTE → STATE
-                                     ↓
-                              [Hardcoded Silicon]
-                              Bit patterns → operations
+                        ┌─────────────────────────────────────────┐
+                        │           ncpu.neural.NeuralCPU         │
+                        │         (12K lines, real ARM64)          │
+                        │                                         │
+  ARM64 Binary ────────►│  Registers [32] ── torch.int64 tensor   │
+                        │  Memory [1MB]   ── torch.uint8 tensor   │
+                        │  Flags [4]      ── torch.float tensor   │
+                        │  PC             ── torch.int64 tensor   │
+                        │                                         │
+                        │  ┌─────────────────────────────────┐    │
+                        │  │      Neural ALU Bridge          │    │
+                        │  │  ADD/SUB → arithmetic.pt        │    │
+                        │  │  MUL     → multiply.pt          │    │
+                        │  │  AND/OR/XOR → logical.pt        │    │
+                        │  │  LSL/LSR → lsl.pt/lsr.pt        │    │
+                        │  │  CMP     → neural subtraction   │    │
+                        │  │  sin/cos/sqrt/exp/log/atan2     │    │
+                        │  └─────────────────────────────────┘    │
+                        │                                         │
+                        │  Fast mode: native GPU tensor ops       │
+                        │  Neural mode: all ops through .pt models│
+                        └─────────────────────────────────────────┘
 
-KVRM-CPU:         MEMORY → FETCH → DECODE_LLM → KEY → REGISTRY → EXECUTE → STATE
-                                       ↓          ↓        ↓
-                                 [Semantic LLM] [JSON]  [Verified]
-                                 Instructions → {"op": "OP_ADD", ...}
-                                               Primitives Only
+                        ┌─────────────────────────────────────────┐
+  Text Assembly ───────►│            ncpu.model.CPU               │
+  (MOV R0, 42)          │      (text ISA, neural execution)       │
+                        │                                         │
+                        │  Decode: regex parser → operation key   │
+                        │  Execute: NeuralRegistry                │
+                        │    └── NeuralOps (trained .pt models)   │
+                        │  State: immutable CPUState dataclass    │
+                        └─────────────────────────────────────────┘
 ```
 
-## Core Components
+## Execution Pipeline
 
-### 1. CPUState (`state.py`)
-
-Immutable state representation for the CPU:
-
-```python
-@dataclass
-class CPUState:
-    registers: Dict[str, int]  # R0-R7 (8 general purpose)
-    pc: int                    # Program counter
-    flags: Dict[str, bool]     # ZF (zero), SF (sign)
-    memory: List[str]          # Program instructions
-    labels: Dict[str, int]     # Label → address mapping
-    halted: bool               # Execution stopped
-    cycle_count: int           # Total cycles executed
-```
-
-**Registers:**
-- `R0-R7`: 8 general-purpose 32-bit signed integers
-- `PC`: Program counter (implicit)
-- `FLAGS`: ZF (zero flag), SF (sign flag)
-
-### 2. Registry (`registry.py`)
-
-The verified execution layer. Only pre-defined operations can execute:
-
-| Key | Parameters | Description |
-|-----|------------|-------------|
-| `OP_MOV_REG_IMM` | dest, value | Load immediate into register |
-| `OP_MOV_REG_REG` | dest, src | Register-to-register copy |
-| `OP_ADD` | dest, src1, src2 | Addition |
-| `OP_SUB` | dest, src1, src2 | Subtraction |
-| `OP_MUL` | dest, src1, src2 | Multiplication |
-| `OP_CMP` | src1, src2 | Compare (sets flags) |
-| `OP_JMP` | addr | Unconditional jump |
-| `OP_JZ` | addr | Jump if zero flag set |
-| `OP_JNZ` | addr | Jump if zero flag not set |
-| `OP_HALT` | - | Stop execution |
-| `OP_NOP` | - | No operation |
-| `OP_INVALID` | raw | Error handler |
-
-Each primitive is a pure function: `(state, params) → new_state`
-
-### 3. Decode LLM (`decode_llm.py`)
-
-The semantic decoder that transforms instructions into verified keys:
+### Neural Mode (default)
 
 ```
-Input:  "ADD R3, R1, R2"
-Output: {"key": "OP_ADD", "params": {"dest": "R3", "src1": "R1", "src2": "R2"}}
+1. FETCH:   instruction_bits = memory[PC:PC+4]
+2. DECODE:  Neural extractors + lookup tables → OpType, rd, rn, rm, imm
+3. EXECUTE: Neural ALU Bridge → trained .pt model inference
+4. COMMIT:  Write result to GPU register tensor
+5. ADVANCE: PC += 4 (or branch offset)
 ```
 
-**Modes:**
-- **Mock Mode**: Rule-based parser for development/testing
-- **Real Mode**: Trained TinyLlama-1.1B with LoRA adapters
+Every ALU operation passes through a trained neural network:
+- **ADD X0, X1, X2**: Kogge-Stone CLA (arithmetic.pt + carry_combine.pt + logical.pt) — 8 neural passes
+- **MUL X0, X1, X2**: multiply.pt performs up to 16 byte-pair LUT lookups
+- **AND X0, X1, X2**: logical.pt does single vectorized truth table lookup
+- **LSL X0, X1, X2**: lsl.pt runs shift_decoder → index_net → validity_net (3 batched passes)
+- **CMP X0, X1**: neural CLA subtraction through carry_combine.pt, flags derived from result
 
-### 4. CPU Orchestrator (`cpu.py`)
+### Fast Mode (--fast)
 
-The main execution engine:
+Same NeuralCPU, but ALU operations use native GPU tensor arithmetic (`+`, `-`, `*`, `&`, `|`, `^`, `<<`, `>>`). Decode, memory, registers, branches — all still on GPU as tensors. Only the ALU computation path changes.
 
-```python
-class KVRMCPU:
-    def load_program(source: str)      # Parse and load assembly
-    def step() -> TraceEntry           # Single cycle execution
-    def run(max_cycles) -> List[...]   # Run until HALT
-    def get_register(reg) -> int       # Read register value
-    def dump_registers() -> dict       # All register values
-    def get_trace() -> List[TraceEntry]  # Execution history
-```
+## Neural ALU Bridge
 
-## Execution Flow
+The bridge connects the 64-bit GPU-resident NeuralCPU to the 32-bit trained models:
 
 ```
-1. FETCH:    instruction = memory[PC]
-2. DECODE:   key, params = decode_llm.decode(instruction, labels)
-3. VALIDATE: assert key in VALID_REGISTRY_KEYS
-4. EXECUTE:  new_state = registry[key](state, params)
-5. TRACE:    record(cycle, instruction, key, params, pre_state, post_state)
-6. REPEAT:   until HALT or max_cycles
+NeuralCPU (torch.int64)
+    │
+    ├── 64→32 bit narrowing (truncate upper 32 bits)
+    ├── Dispatch to trained model
+    │     ├── arithmetic.pt (ADD/SUB/INC/DEC)
+    │     ├── multiply.pt (MUL)
+    │     ├── logical.pt (AND/OR/XOR)
+    │     ├── lsl.pt / lsr.pt (SHL/SHR)
+    │     └── math models (sin/cos/sqrt/exp/log/atan2)
+    └── Result → Python int → assigned back to register tensor
 ```
 
-## Instruction Set Architecture (ISA)
+## Model Wiring
 
-### Data Movement
-```asm
-MOV R0, 42      ; Load immediate value
-MOV R1, R0      ; Copy register to register
-```
+| ARM64 Instruction | Model | Method | Latency |
+|-------------------|-------|--------|---------|
+| ADD (imm/reg) | arithmetic.pt + carry_combine.pt | `bridge.add(a, b)` | 248 us |
+| SUB (imm/reg) | arithmetic.pt + carry_combine.pt | `bridge.sub(a, b)` | 246 us |
+| MUL | multiply.pt | `bridge.mul(a, b)` | 21 us |
+| AND (reg) | logical.pt | `bridge.and_(a, b)` | 21 us |
+| ORR (reg) | logical.pt | `bridge.or_(a, b)` | 22 us |
+| EOR (reg) | logical.pt | `bridge.xor_(a, b)` | 21 us |
+| LSL (reg/imm) | lsl.pt | `bridge.shl(val, amt)` | 437 us |
+| LSR (reg/imm) | lsr.pt | `bridge.shr(val, amt)` | 431 us |
+| CMP (imm/reg) | carry_combine.pt | `bridge.cmp(a, b)` → flags | 249 us |
+| sin | sincos.pt | `bridge.sin(a)` | 48 us |
+| cos | sincos.pt | `bridge.cos(a)` | 48 us |
+| sqrt | sqrt.pt | `bridge.sqrt(a)` | 522 us |
+| exp | exp.pt | `bridge.exp_(a)` | 21 us |
+| log | log.pt | `bridge.log_(a)` | 21 us |
+| atan2 | atan2.pt | `bridge.atan2(y, x)` | 935 us |
 
-### Arithmetic
-```asm
-ADD R3, R1, R2  ; R3 = R1 + R2
-SUB R3, R1, R2  ; R3 = R1 - R2
-MUL R3, R1, R2  ; R3 = R1 * R2
-```
+## GPU-Resident State
 
-### Comparison
-```asm
-CMP R1, R2      ; Sets ZF if R1 == R2, SF if R1 < R2
-```
+All CPU state lives on GPU as tensors — no CPU↔GPU transfer during execution except instruction fetch:
 
-### Control Flow
-```asm
-JMP loop        ; Unconditional jump to label
-JZ done         ; Jump if ZF set (values equal)
-JNZ loop        ; Jump if ZF not set (values not equal)
-```
+| Component | Type | Shape | Device |
+|-----------|------|-------|--------|
+| Registers (X0-X30) | `torch.int64` | `[32]` | GPU |
+| Memory | `torch.uint8` | `[1048576]` | GPU |
+| Flags (N,Z,C,V) | `torch.float32` | `[4]` | GPU |
+| Program Counter | `torch.int64` | scalar | GPU |
+| Stack Pointer | `torch.int64` | scalar | GPU |
+| Branch Trace Buffer | `torch.int64` | `[2048, 4]` | GPU |
+| Instruction Sequence | `torch.float32` | `[256, 32]` | GPU |
 
-### Special
-```asm
-HALT            ; Stop execution
-NOP             ; No operation
-```
+## Performance Characteristics
 
-### Labels
-```asm
-loop:           ; Define label at current address
-    ADD R0, R0, R1
-    JMP loop    ; Reference label
-```
-
-## Training Pipeline
-
-### Data Generation (`training/generate_cpu_data.py`)
-
-Generates 50,000 training samples with augmentations:
-
-| Category | Count | Examples |
-|----------|-------|----------|
-| MOV reg, imm | 10k | "MOV R3, 42", "mov r1, 0x1F" |
-| MOV reg, reg | 5k | "MOV R1, R2" |
-| ADD/SUB/MUL | 15k | "ADD R3 R1 R2", "sub r0, r5, r4" |
-| CMP | 5k | "CMP R1, R2" |
-| JMP/JZ/JNZ | 10k | "JMP loop", "jz 10" |
-| HALT/NOP | 2k | "HALT", "nop" |
-| Invalid | 3k | "FOO R1", "" |
-
-**Augmentations:**
-- Random capitalization: ADD, add, Add
-- With/without commas: ADD R3 R1 R2, ADD R3, R1, R2
-- Whitespace variations: extra spaces, tabs
-- Label vs numeric addresses
-
-### Model Training (`training/train_decode.py`)
-
-**Configuration:**
-- Base model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
-- LoRA: r=16, alpha=32, dropout=0.05
-- Target modules: q_proj, k_proj, v_proj, o_proj
-- Epochs: 3
-- Batch size: 4 (MPS-optimized)
-- Learning rate: 3e-4
-
-**Prompt Format:**
-```
-### Context:
-ADD R3, R1, R2
-
-### Key:
-{"key": "OP_ADD", "params": {"dest": "R3", "src1": "R1", "src2": "R2"}}
-```
-
-## Benchmark Results
-
-Comparison of Traditional CPU emulator vs KVRM-CPU:
-
-| Mode | Avg Time/Run | Overhead | Correctness |
-|------|--------------|----------|-------------|
-| Traditional | ~0.1ms | 1x | 100% |
-| KVRM Mock | ~0.2ms | 2x | 100% |
-| KVRM Real | ~50ms (uncached) | 500x | >95% |
-
-The overhead is the cost of semantic understanding - acceptable for verified, auditable computing.
-
-## KVRM Benefits
-
-1. **Semantic Understanding**: Instructions decoded by meaning, not bit patterns
-2. **Full Auditability**: Every decode decision is traceable
-3. **Natural Language Input**: "Add R3, R1, R2" parsed semantically
-4. **Verification Layer**: Decoded keys checked against verified registry
-5. **Extensibility**: New instructions via training, not silicon changes
-6. **Error Explanations**: Invalid instructions get semantic error messages
-
-## Example Programs
-
-### Sum 1-10 (`programs/sum_1_to_10.asm`)
-```asm
-    MOV R0, 0       ; sum = 0
-    MOV R1, 1       ; counter = 1
-    MOV R2, 11      ; limit
-    MOV R3, 1       ; increment
-loop:
-    ADD R0, R0, R1  ; sum += counter
-    ADD R1, R1, R3  ; counter++
-    CMP R1, R2      ; compare to limit
-    JNZ loop        ; continue if not equal
-    HALT            ; R0 = 55
-```
-
-### Fibonacci (`programs/fibonacci.asm`)
-```asm
-    MOV R0, 0       ; fib(0)
-    MOV R1, 1       ; fib(1)
-    MOV R2, 10      ; iterations
-    MOV R3, 0       ; counter
-    MOV R4, 1       ; constant 1
-loop:
-    MOV R5, R1      ; temp = current
-    ADD R1, R0, R1  ; current = prev + current
-    MOV R0, R5      ; prev = temp
-    ADD R3, R3, R4  ; counter++
-    CMP R3, R2
-    JNZ loop
-    HALT            ; R1 = 89
-```
-
-## Usage
-
-### CLI
-```bash
-# Run with mock decoder
-python main.py --program programs/sum_1_to_10.asm --mode mock
-
-# Run with trained model
-python main.py --program programs/fibonacci.asm --mode real --model models/decode_llm
-
-# Show execution trace
-python main.py --program programs/multiply.asm --trace
-```
-
-### Python API
-```python
-from kvrm_cpu import KVRMCPU
-
-# Mock mode (no GPU needed)
-cpu = KVRMCPU(mock_mode=True)
-cpu.load_program(source_code)
-trace = cpu.run()
-print(cpu.dump_registers())
-
-# Real mode (with trained model)
-cpu = KVRMCPU(mock_mode=False, model_path="models/decode_llm")
-cpu.load()
-cpu.load_program(source_code)
-trace = cpu.run()
-cpu.unload()
-```
-
-### Gradio Demo
-```bash
-python demo/gradio_app.py
-# Opens web interface at http://localhost:7861
-```
-
-## Project Structure
+Per-operation latency on Apple Silicon MPS (1,000 iterations, PyTorch 2.10.0):
 
 ```
-kvrm-cpu/
-├── src/kvrm_cpu/
-│   ├── __init__.py      # Public API
-│   ├── state.py         # CPUState dataclass
-│   ├── registry.py      # Verified primitives (12 ops)
-│   ├── decode_llm.py    # Semantic decoder
-│   └── cpu.py           # Main orchestrator
-├── training/
-│   ├── generate_cpu_data.py  # 50k samples
-│   └── train_decode.py       # LoRA fine-tuning
-├── programs/
-│   ├── sum_1_to_10.asm
-│   ├── fibonacci.asm
-│   └── multiply.asm
-├── benchmarks/
-│   └── cpu_benchmark.py      # Traditional vs KVRM
-├── tests/
-│   ├── test_state.py
-│   ├── test_registry.py
-│   ├── test_decode.py
-│   └── test_programs.py
-├── demo/
-│   └── gradio_app.py         # Web interface
-├── main.py                   # CLI entry point
-└── requirements.txt
+O(1) Operations — Single Forward Pass (~21 us)
+  ├── exp/log:     21 us   (4-layer MLP)
+  ├── mul:         21 us   (batched byte-pair LUT)
+  └── and/or/xor:  21 us   (vectorized truth table)
+
+O(2) Operations — Few Passes (~48 us)
+  └── sin/cos:     48 us   (5 sine-activated blocks)
+
+O(log n) Operations — Kogge-Stone CLA (~248 us)
+  └── add/sub/cmp: 248 us   (8 neural passes: 2 logical + 5 carry-combine + 1 XOR)
+
+O(3) Operations — Batched Passes (~434 us)
+  └── shl/shr:    434 us   (3 batched attention passes, vectorized)
+
+O(n) Operations — Sequential Passes
+  ├── sqrt:       522 us   (2 stages + BatchNorm batch padding)
+  └── atan2:      935 us   (6 residual layers + batch padding)
 ```
 
-## Requirements
+**Key insight**: Neural MUL (21 us) is **12x faster** than neural ADD (248 us).
+In conventional CPUs, MUL is typically 3-10x *slower* than ADD. The inversion
+persists even with the CLA optimization because the byte-pair LUT achieves O(1)
+while carry-lookahead is O(log n).
+
+**CLA speedup**: Kogge-Stone parallel-prefix carry-lookahead reduced ADD/SUB/CMP
+from ~826 us (32 ripple-carry passes) to ~248 us (8 CLA passes) — a **3.3x speedup**.
+
+Shift operations were vectorized from 64 sequential per-bit passes (2,833 us) to 3
+batched forward passes (434 us) --- a **6.5x speedup**. Shifts are now faster than sqrt.
+
+All 22 models cold-load in **60ms**. Programs execute at ~201 us/cycle average (~4,975 IPS).
+
+## Component Map
 
 ```
-torch>=2.0.0
-transformers>=4.35.0
-peft>=0.6.0
-datasets>=2.14.0
-accelerate>=0.24.0
-gradio>=4.0.0
-pytest>=7.0.0
-tqdm>=4.66.0
+ncpu/
+├── neural/                      # Full GPU neural CPU
+│   ├── cpu.py                   # NeuralCPU (12K lines) — ARM64 execution engine
+│   ├── neural_alu_bridge.py     # Bridge: 64-bit tensors ↔ 32-bit trained models
+│   ├── memory_oracle.py         # LSTM memory access predictor
+│   └── semantic_dispatcher.py   # Neural instruction dispatch
+│
+├── model/                       # Model-based CPU (text assembly)
+│   ├── cpu.py                   # CPU orchestrator
+│   ├── state.py                 # Immutable CPUState
+│   ├── registry.py              # Verified operation registry
+│   ├── decode.py                # Text assembly parser
+│   ├── neural_ops.py            # Neural ALU operations (loads .pt models)
+│   └── architectures.py         # All model class definitions
+│
+├── tensor/                      # Pure tensor ARM64 kernel
+│   ├── cpu.py                   # Tensor CPU
+│   └── kernel.py                # TensorKernel — batch execution
+│
+models/                          # Trained weights
+├── alu/                         # 6 ALU models (incl. carry_combine)
+├── shifts/                      # 4 shift/rotate models
+├── register/                    # 2 register models (archived)
+├── memory/                      # 3 memory models (archived)
+├── decoder/                     # 1 decoder model (archived)
+├── math/                        # 6 math models (wired)
+└── decode_llm/                  # Qwen2.5 LoRA adapter
 ```
-
-## Theoretical Foundation
-
-KVRM-CPU demonstrates that the KVRM paradigm applies at every level of computing:
-
-1. **Vector Operations** (kvrm-vector): `push`, `pop`, `sort` → semantic intents
-2. **CPU Operations** (kvrm-cpu): `ADD`, `MOV`, `JMP` → verified keys
-3. **OS Operations** (future): `open`, `read`, `exec` → semantic syscalls
-
-The key insight: **Any operation that can be verified can be semantically decoded.**
-
-This creates a foundation for:
-- Auditable computing where every decision is traceable
-- Extensible systems where new operations are trained, not coded
-- Natural language interfaces to low-level systems
-- Verified execution where only approved operations run

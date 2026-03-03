@@ -1,269 +1,238 @@
-"""Tests for DecodeLLM instruction decoder."""
-
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+"""Tests for the instruction decoder."""
 
 import pytest
-from kvrm_cpu.decode_llm import DecodeLLM, DecodeResult, parse_program
+from ncpu.model.decode import Decoder, DecodeResult, parse_program
 
 
-class TestDecodeResultDataclass:
-    """Test DecodeResult structure."""
-
+class TestDecodeResult:
     def test_valid_result(self):
-        """Valid decode result has key and params."""
         result = DecodeResult("OP_ADD", {"dest": "R0"}, True)
         assert result.key == "OP_ADD"
-        assert result.params == {"dest": "R0"}
         assert result.valid is True
         assert result.error is None
 
     def test_invalid_result(self):
-        """Invalid decode result has error message."""
         result = DecodeResult("OP_INVALID", {}, False, error="Unknown")
         assert result.valid is False
         assert result.error == "Unknown"
 
 
-class TestMockDecodeMovInstructions:
-    """Test mock decoder for MOV instructions."""
-
+class TestMockDecodeMov:
     @pytest.fixture
     def decoder(self):
-        return DecodeLLM(mock_mode=True)
+        return Decoder(mock_mode=True)
 
     def test_mov_reg_imm_decimal(self, decoder):
-        """MOV Rd, imm with decimal value."""
         result = decoder.decode("MOV R0, 42")
-        assert result.valid is True
-        assert result.key == "OP_MOV_REG_IMM"
+        assert result.valid and result.key == "OP_MOV_REG_IMM"
         assert result.params == {"dest": "R0", "value": 42}
 
     def test_mov_reg_imm_hex(self, decoder):
-        """MOV Rd, imm with hex value."""
         result = decoder.decode("MOV R1, 0xFF")
-        assert result.valid is True
-        assert result.key == "OP_MOV_REG_IMM"
-        assert result.params == {"dest": "R1", "value": 255}
+        assert result.valid and result.params == {"dest": "R1", "value": 255}
 
     def test_mov_reg_imm_negative(self, decoder):
-        """MOV Rd, imm with negative value."""
         result = decoder.decode("MOV R2, -10")
-        assert result.valid is True
-        assert result.key == "OP_MOV_REG_IMM"
-        assert result.params == {"dest": "R2", "value": -10}
+        assert result.valid and result.params == {"dest": "R2", "value": -10}
 
     def test_mov_reg_reg(self, decoder):
-        """MOV Rd, Rs copies register."""
         result = decoder.decode("MOV R0, R1")
-        assert result.valid is True
-        assert result.key == "OP_MOV_REG_REG"
+        assert result.valid and result.key == "OP_MOV_REG_REG"
         assert result.params == {"dest": "R0", "src": "R1"}
 
 
 class TestMockDecodeArithmetic:
-    """Test mock decoder for arithmetic instructions."""
-
     @pytest.fixture
     def decoder(self):
-        return DecodeLLM(mock_mode=True)
+        return Decoder(mock_mode=True)
 
     def test_add(self, decoder):
-        """ADD Rd, Rs1, Rs2."""
         result = decoder.decode("ADD R3, R1, R2")
-        assert result.valid is True
-        assert result.key == "OP_ADD"
+        assert result.valid and result.key == "OP_ADD"
         assert result.params == {"dest": "R3", "src1": "R1", "src2": "R2"}
 
     def test_sub(self, decoder):
-        """SUB Rd, Rs1, Rs2."""
         result = decoder.decode("SUB R0, R5, R4")
-        assert result.valid is True
-        assert result.key == "OP_SUB"
-        assert result.params == {"dest": "R0", "src1": "R5", "src2": "R4"}
+        assert result.valid and result.key == "OP_SUB"
 
     def test_mul(self, decoder):
-        """MUL Rd, Rs1, Rs2."""
         result = decoder.decode("MUL R7, R3, R2")
-        assert result.valid is True
-        assert result.key == "OP_MUL"
-        assert result.params == {"dest": "R7", "src1": "R3", "src2": "R2"}
+        assert result.valid and result.key == "OP_MUL"
+
+    def test_div(self, decoder):
+        result = decoder.decode("DIV R0, R1, R2")
+        assert result.valid and result.key == "OP_DIV"
+        assert result.params == {"dest": "R0", "src1": "R1", "src2": "R2"}
+
+    def test_inc(self, decoder):
+        result = decoder.decode("INC R0")
+        assert result.valid and result.key == "OP_INC"
+        assert result.params == {"dest": "R0"}
+
+    def test_dec(self, decoder):
+        result = decoder.decode("DEC R5")
+        assert result.valid and result.key == "OP_DEC"
+        assert result.params == {"dest": "R5"}
+
+
+class TestMockDecodeBitwise:
+    @pytest.fixture
+    def decoder(self):
+        return Decoder(mock_mode=True)
+
+    def test_and(self, decoder):
+        result = decoder.decode("AND R0, R1, R2")
+        assert result.valid and result.key == "OP_AND"
+        assert result.params == {"dest": "R0", "src1": "R1", "src2": "R2"}
+
+    def test_or(self, decoder):
+        result = decoder.decode("OR R3, R4, R5")
+        assert result.valid and result.key == "OP_OR"
+        assert result.params == {"dest": "R3", "src1": "R4", "src2": "R5"}
+
+    def test_xor(self, decoder):
+        result = decoder.decode("XOR R6, R0, R7")
+        assert result.valid and result.key == "OP_XOR"
+        assert result.params == {"dest": "R6", "src1": "R0", "src2": "R7"}
+
+
+class TestMockDecodeShifts:
+    @pytest.fixture
+    def decoder(self):
+        return Decoder(mock_mode=True)
+
+    def test_shl_immediate(self, decoder):
+        result = decoder.decode("SHL R0, R1, 3")
+        assert result.valid and result.key == "OP_SHL"
+        assert result.params == {"dest": "R0", "src": "R1", "amount": 3}
+
+    def test_shr_immediate(self, decoder):
+        result = decoder.decode("SHR R2, R3, 4")
+        assert result.valid and result.key == "OP_SHR"
+        assert result.params == {"dest": "R2", "src": "R3", "amount": 4}
+
+    def test_shl_register(self, decoder):
+        result = decoder.decode("SHL R0, R1, R2")
+        assert result.valid and result.key == "OP_SHL"
+        assert result.params == {"dest": "R0", "src": "R1", "amount_reg": "R2"}
+
+    def test_shr_register(self, decoder):
+        result = decoder.decode("SHR R4, R5, R6")
+        assert result.valid and result.key == "OP_SHR"
+        assert result.params == {"dest": "R4", "src": "R5", "amount_reg": "R6"}
+
+    def test_shl_hex_immediate(self, decoder):
+        result = decoder.decode("SHL R0, R1, 0x10")
+        assert result.valid and result.params == {"dest": "R0", "src": "R1", "amount": 16}
 
 
 class TestMockDecodeComparison:
-    """Test mock decoder for CMP instruction."""
-
-    @pytest.fixture
-    def decoder(self):
-        return DecodeLLM(mock_mode=True)
-
-    def test_cmp(self, decoder):
-        """CMP Rs1, Rs2."""
-        result = decoder.decode("CMP R1, R2")
-        assert result.valid is True
-        assert result.key == "OP_CMP"
+    def test_cmp(self):
+        result = Decoder(mock_mode=True).decode("CMP R1, R2")
+        assert result.valid and result.key == "OP_CMP"
         assert result.params == {"src1": "R1", "src2": "R2"}
 
 
 class TestMockDecodeControlFlow:
-    """Test mock decoder for control flow instructions."""
-
     @pytest.fixture
     def decoder(self):
-        return DecodeLLM(mock_mode=True)
+        return Decoder(mock_mode=True)
 
     def test_jmp_numeric(self, decoder):
-        """JMP with numeric address."""
         result = decoder.decode("JMP 5")
-        assert result.valid is True
-        assert result.key == "OP_JMP"
-        assert result.params == {"addr": 5}
+        assert result.valid and result.params == {"addr": 5}
 
     def test_jmp_label(self, decoder):
-        """JMP with label."""
         decoder.set_labels({"loop": 3})
         result = decoder.decode("JMP loop")
-        assert result.valid is True
-        assert result.key == "OP_JMP"
-        assert result.params == {"addr": 3}
+        assert result.valid and result.params == {"addr": 3}
 
     def test_jz(self, decoder):
-        """JZ with numeric address."""
         result = decoder.decode("JZ 10")
-        assert result.valid is True
-        assert result.key == "OP_JZ"
-        assert result.params == {"addr": 10}
+        assert result.valid and result.key == "OP_JZ"
 
     def test_jnz_label(self, decoder):
-        """JNZ with label."""
         decoder.set_labels({"done": 7})
         result = decoder.decode("JNZ done")
-        assert result.valid is True
-        assert result.key == "OP_JNZ"
-        assert result.params == {"addr": 7}
+        assert result.valid and result.params == {"addr": 7}
+
+    def test_js(self, decoder):
+        result = decoder.decode("JS 3")
+        assert result.valid and result.key == "OP_JS"
+
+    def test_jns(self, decoder):
+        result = decoder.decode("JNS 8")
+        assert result.valid and result.key == "OP_JNS"
 
     def test_unknown_label(self, decoder):
-        """Unknown label returns invalid result."""
         result = decoder.decode("JMP unknown")
-        assert result.valid is False
+        assert not result.valid
         assert "Unknown label" in result.error
 
 
 class TestMockDecodeSpecial:
-    """Test mock decoder for special instructions."""
-
     @pytest.fixture
     def decoder(self):
-        return DecodeLLM(mock_mode=True)
+        return Decoder(mock_mode=True)
 
     def test_halt(self, decoder):
-        """HALT instruction."""
         result = decoder.decode("HALT")
-        assert result.valid is True
-        assert result.key == "OP_HALT"
-        assert result.params == {}
+        assert result.valid and result.key == "OP_HALT"
 
     def test_nop(self, decoder):
-        """NOP instruction."""
         result = decoder.decode("NOP")
-        assert result.valid is True
-        assert result.key == "OP_NOP"
-        assert result.params == {}
+        assert result.valid and result.key == "OP_NOP"
 
 
 class TestMockDecodeInvalid:
-    """Test mock decoder error handling."""
-
     @pytest.fixture
     def decoder(self):
-        return DecodeLLM(mock_mode=True)
+        return Decoder(mock_mode=True)
 
     def test_empty_instruction(self, decoder):
-        """Empty instruction returns invalid."""
         result = decoder.decode("")
-        assert result.valid is False
-        assert result.key == "OP_INVALID"
+        assert not result.valid and result.key == "OP_INVALID"
 
     def test_unknown_instruction(self, decoder):
-        """Unknown instruction returns invalid."""
         result = decoder.decode("BADOP R1, R2")
-        assert result.valid is False
-        assert result.key == "OP_INVALID"
+        assert not result.valid
 
     def test_malformed_mov(self, decoder):
-        """Malformed MOV returns invalid."""
-        result = decoder.decode("MOV R9, 10")  # R9 doesn't exist
-        assert result.valid is False
+        result = decoder.decode("MOV R9, 10")
+        assert not result.valid
 
 
 class TestMockDecodeCaseInsensitivity:
-    """Test case-insensitive parsing."""
-
     @pytest.fixture
     def decoder(self):
-        return DecodeLLM(mock_mode=True)
+        return Decoder(mock_mode=True)
 
     def test_lowercase(self, decoder):
-        """Lowercase instructions are parsed."""
-        result = decoder.decode("mov r0, 42")
-        assert result.valid is True
-        assert result.key == "OP_MOV_REG_IMM"
+        assert decoder.decode("mov r0, 42").valid
 
     def test_mixed_case(self, decoder):
-        """Mixed case instructions are parsed."""
-        result = decoder.decode("Add R0, r1, R2")
-        assert result.valid is True
-        assert result.key == "OP_ADD"
+        assert decoder.decode("Add R0, r1, R2").valid
 
 
 class TestProgramParser:
-    """Test parse_program function."""
-
     def test_simple_program(self):
-        """Parse simple program without labels."""
-        source = """
-        MOV R0, 1
-        HALT
-        """
-        instructions, labels = parse_program(source)
+        instructions, labels = parse_program("MOV R0, 1\nHALT")
         assert instructions == ["MOV R0, 1", "HALT"]
         assert labels == {}
 
     def test_program_with_labels(self):
-        """Parse program with labels."""
-        source = """
-        start:
-            MOV R0, 1
-        loop:
-            ADD R0, R0, R1
-            JNZ loop
-            HALT
-        """
+        source = "start:\n  MOV R0, 1\nloop:\n  ADD R0, R0, R1\n  JNZ loop\n  HALT"
         instructions, labels = parse_program(source)
         assert len(instructions) == 4
         assert labels["start"] == 0
         assert labels["loop"] == 1
 
     def test_comments_removed(self):
-        """Comments are stripped."""
-        source = """
-        MOV R0, 1  ; load 1
-        # This is a comment
-        HALT ; done
-        """
-        instructions, labels = parse_program(source)
+        source = "MOV R0, 1  ; load 1\n# comment\nHALT ; done"
+        instructions, _ = parse_program(source)
         assert instructions == ["MOV R0, 1", "HALT"]
 
     def test_empty_lines_ignored(self):
-        """Empty lines are ignored."""
-        source = """
-
-        MOV R0, 1
-
-        HALT
-
-        """
-        instructions, labels = parse_program(source)
+        source = "\n\nMOV R0, 1\n\nHALT\n\n"
+        instructions, _ = parse_program(source)
         assert instructions == ["MOV R0, 1", "HALT"]

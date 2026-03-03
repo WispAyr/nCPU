@@ -1,0 +1,289 @@
+{
+  "timestamp": "2026-03-02T23:46:56-0500",
+  "config": {
+    "n_iterations": 1000,
+    "warmup_iterations": 50,
+    "models_dir": "/Users/bobbyprice/projects/nCPU/models",
+    "programs_dir": "/Users/bobbyprice/projects/nCPU/programs"
+  },
+  "system": {
+    "python_version": "3.14.2",
+    "platform": "macOS-15.5-arm64-arm-64bit-Mach-O",
+    "processor": "arm",
+    "torch_version": "2.10.0",
+    "torch_device": "mps",
+    "gpu_name": "Apple Silicon (MPS)",
+    "gpu_memory_mb": null
+  },
+  "model_availability": {
+    "ADD": true,
+    "SUB": true,
+    "INC": true,
+    "DEC": true,
+    "DIV": true,
+    "MUL": true,
+    "CMP": true,
+    "AND": true,
+    "OR": true,
+    "XOR": true,
+    "SHL": true,
+    "SHR": true,
+    "SIN": true,
+    "COS": true,
+    "SQRT": true,
+    "EXP": true,
+    "LOG": true,
+    "ATAN2": true
+  },
+  "model_load_time_ms": 59.5,
+  "operation_benchmarks": {
+    "add": {
+      "mean_us": 248.433371,
+      "median_us": 246.4375,
+      "p99_us": 308.92657999999983,
+      "min_us": 221.541,
+      "max_us": 517.792,
+      "stdev_us": 20.367637288209526
+    },
+    "sub": {
+      "mean_us": 246.361487,
+      "median_us": 247.0,
+      "p99_us": 286.76207999999997,
+      "min_us": 223.834,
+      "max_us": 340.5,
+      "stdev_us": 13.64072328271146
+    },
+    "mul": {
+      "mean_us": 21.420217,
+      "median_us": 21.375,
+      "p99_us": 27.29408,
+      "min_us": 17.041,
+      "max_us": 52.833,
+      "stdev_us": 2.2604821258643812
+    },
+    "and_": {
+      "mean_us": 21.396328,
+      "median_us": 21.2705,
+      "p99_us": 30.083,
+      "min_us": 18.959,
+      "max_us": 48.208,
+      "stdev_us": 2.33069176480257
+    },
+    "or_": {
+      "mean_us": 21.768954,
+      "median_us": 21.542,
+      "p99_us": 29.12708,
+      "min_us": 18.833,
+      "max_us": 70.209,
+      "stdev_us": 2.4751077201023213
+    },
+    "xor_": {
+      "mean_us": 21.235525,
+      "median_us": 21.292,
+      "p99_us": 28.094259999999988,
+      "min_us": 18.833,
+      "max_us": 47.417,
+      "stdev_us": 2.157335469439721
+    },
+    "shl": {
+      "mean_us": 437.329996,
+      "median_us": 429.64599999999996,
+      "p99_us": 618.0568400000001,
+      "min_us": 320.167,
+      "max_us": 909.458,
+      "stdev_us": 53.79843129465533
+    },
+    "shr": {
+      "mean_us": 431.226086,
+      "median_us": 426.5,
+      "p99_us": 539.9460100000001,
+      "min_us": 322.834,
+      "max_us": 1655.834,
+      "stdev_us": 60.36682724041142
+    },
+    "cmp": {
+      "mean_us": 249.142822,
+      "median_us": 249.04149999999998,
+      "p99_us": 291.70865999999995,
+      "min_us": 222.541,
+      "max_us": 392.75,
+      "stdev_us": 14.958883493084492
+    },
+    "sin": {
+      "mean_us": 47.844671,
+      "median_us": 47.3955,
+      "p99_us": 61.88749999999999,
+      "min_us": 43.666,
+      "max_us": 89.416,
+      "stdev_us": 3.0286472480155084
+    },
+    "cos": {
+      "mean_us": 47.75814,
+      "median_us": 47.584,
+      "p99_us": 53.58342,
+      "min_us": 44.25,
+      "max_us": 62.542,
+      "stdev_us": 1.5309258055902717
+    },
+    "sqrt": {
+      "mean_us": 522.034248,
+      "median_us": 521.1045,
+      "p99_us": 595.81074,
+      "min_us": 402.0,
+      "max_us": 626.459,
+      "stdev_us": 27.869084125648953
+    },
+    "exp_": {
+      "mean_us": 20.560406,
+      "median_us": 19.75,
+      "p99_us": 23.62541,
+      "min_us": 18.125,
+      "max_us": 35.542,
+      "stdev_us": 1.555803135541435
+    },
+    "log_": {
+      "mean_us": 20.459168,
+      "median_us": 19.625,
+      "p99_us": 23.836329999999993,
+      "min_us": 18.916,
+      "max_us": 34.167,
+      "stdev_us": 1.4245798494726518
+    },
+    "atan2": {
+      "mean_us": 934.759653,
+      "median_us": 917.7705000000001,
+      "p99_us": 1110.853,
+      "min_us": 837.042,
+      "max_us": 1210.209,
+      "stdev_us": 60.68033612852901
+    }
+  },
+  "program_benchmarks": [
+    {
+      "program": "bitwise.asm",
+      "instructions": 10,
+      "cycles": 10,
+      "wall_time_ms": 2.258,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 16,
+        "R1": 15,
+        "R2": 15,
+        "R3": 255,
+        "R4": 240,
+        "R5": 8,
+        "R6": 4,
+        "R7": 0
+      }
+    },
+    {
+      "program": "countdown.asm",
+      "instructions": 6,
+      "cycles": 36,
+      "wall_time_ms": 6.941,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": -1,
+        "R1": 55,
+        "R2": 0,
+        "R3": 0,
+        "R4": 0,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "countup_to_negative.asm",
+      "instructions": 8,
+      "cycles": 44,
+      "wall_time_ms": 9.1,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 5,
+        "R1": 10,
+        "R2": 5,
+        "R3": 0,
+        "R4": 0,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "fibonacci.asm",
+      "instructions": 12,
+      "cycles": 66,
+      "wall_time_ms": 8.98,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 55,
+        "R1": 89,
+        "R2": 10,
+        "R3": 10,
+        "R4": 1,
+        "R5": 55,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "multiply.asm",
+      "instructions": 10,
+      "cycles": 30,
+      "wall_time_ms": 5.456,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 42,
+        "R1": 7,
+        "R2": 0,
+        "R3": 1,
+        "R4": 0,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "power_of_two.asm",
+      "instructions": 9,
+      "cycles": 37,
+      "wall_time_ms": 9.7,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 256,
+        "R1": 8,
+        "R2": 8,
+        "R3": 1,
+        "R4": 0,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "sum_1_to_10.asm",
+      "instructions": 9,
+      "cycles": 45,
+      "wall_time_ms": 8.98,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 55,
+        "R1": 11,
+        "R2": 11,
+        "R3": 1,
+        "R4": 0,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    }
+  ]
+}
