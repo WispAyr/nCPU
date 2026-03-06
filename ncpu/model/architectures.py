@@ -551,6 +551,72 @@ if TORCH_AVAILABLE:
             idx = angle_index.long() % self.n_angles
             return self.sine_table[idx]
 
+    # ------------------------------------------------------------------
+    # Instruction Decoder — character-level CNN for opcode classification
+    # ------------------------------------------------------------------
+
+    class InstructionDecoderNet(nn.Module):
+        """Neural instruction decoder — classifies assembly text to opcode.
+
+        Character-level CNN encoder → opcode classification.
+        After classification, operands are extracted deterministically
+        based on the instruction format (like a real CPU decoder).
+
+        Architecture:
+            Input:  [B, max_len] character indices (ASCII 0-127)
+            Embed:  → [B, embed_dim, max_len]
+            Conv:   3 × Conv1d layers (widening receptive field)
+            Pool:   Global max pool → [B, hidden_dim]
+            Head:   Linear → [B, num_opcodes]
+
+        ~50K parameters. Trains in <60s on CPU.
+        """
+
+        # Canonical opcode ordering (must match training)
+        OPCODES = [
+            "OP_MOV_REG_IMM", "OP_MOV_REG_REG",
+            "OP_ADD", "OP_SUB", "OP_MUL", "OP_DIV",
+            "OP_AND", "OP_OR", "OP_XOR",
+            "OP_SHL", "OP_SHR",
+            "OP_INC", "OP_DEC",
+            "OP_CMP",
+            "OP_JMP", "OP_JZ", "OP_JNZ", "OP_JS", "OP_JNS",
+            "OP_HALT", "OP_NOP", "OP_INVALID",
+        ]
+
+        def __init__(self, vocab_size: int = 128, embed_dim: int = 32,
+                     hidden_dim: int = 128, max_len: int = 64) -> None:
+            super().__init__()
+            num_opcodes = len(self.OPCODES)
+            self.max_len = max_len
+            self.embed = nn.Embedding(vocab_size, embed_dim, padding_idx=0)
+            self.conv1 = nn.Conv1d(embed_dim, hidden_dim, kernel_size=3, padding=1)
+            self.conv2 = nn.Conv1d(hidden_dim, hidden_dim, kernel_size=5, padding=2)
+            self.conv3 = nn.Conv1d(hidden_dim, hidden_dim, kernel_size=3, padding=1)
+            self.classifier = nn.Sequential(
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.ReLU(),
+                nn.Dropout(0.1),
+                nn.Linear(hidden_dim, num_opcodes),
+            )
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Forward pass: [B, max_len] char indices → [B, num_opcodes] logits."""
+            e = self.embed(x).transpose(1, 2)       # [B, embed_dim, max_len]
+            h = torch.relu(self.conv1(e))
+            h = torch.relu(self.conv2(h))
+            h = torch.relu(self.conv3(h))
+            h = h.max(dim=2).values                  # [B, hidden_dim]
+            return self.classifier(h)                 # [B, num_opcodes]
+
+        @staticmethod
+        def encode_instruction(text: str, max_len: int = 64) -> torch.Tensor:
+            """Encode an instruction string as a padded character tensor."""
+            chars = [min(ord(c), 127) for c in text[:max_len]]
+            chars += [0] * (max_len - len(chars))
+            return torch.tensor(chars, dtype=torch.long)
+
+
 else:
     # Provide no-op stubs so imports don't explode without torch.
     class _Stub:  # type: ignore[no-redef]
@@ -568,3 +634,4 @@ else:
     NeuralExp = _Stub  # type: ignore[assignment,misc]
     NeuralLog = _Stub  # type: ignore[assignment,misc]
     DoomTrigLUT = _Stub  # type: ignore[assignment,misc]
+    InstructionDecoderNet = _Stub  # type: ignore[assignment,misc]

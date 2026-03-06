@@ -1,10 +1,11 @@
 """Decoder: Instruction decoder for the model-based nCPU.
 
-Two decode modes:
+Three decode modes:
     - Mock: Fast rule-based regex parsing (no GPU, no model download)
-    - Real: Fine-tuned LLM for semantic understanding (requires torch)
+    - Neural: Trained CNN classifier (~50K params) for opcode identification
+    - Real: Fine-tuned LLM for semantic understanding (legacy, requires torch)
 
-Both modes produce identical output format: (operation_key, params).
+All modes produce identical output format: (operation_key, params).
 """
 
 import re
@@ -25,10 +26,12 @@ class DecodeResult:
 
 
 class Decoder:
-    """Instruction decoder with mock (regex) and real (LLM) modes.
+    """Instruction decoder with mock (regex), neural (CNN), and real (LLM) modes.
 
     Mock mode uses deterministic regex patterns — instant, no dependencies.
-    Real mode uses a fine-tuned LLM for semantic instruction understanding.
+    Neural mode uses a trained 50K-param CNN for opcode classification,
+    then extracts operands deterministically (like a real CPU decoder).
+    Real mode uses a fine-tuned LLM (legacy, requires external model download).
     """
 
     VALID_KEYS: Set[str] = {
@@ -44,15 +47,18 @@ class Decoder:
 
     REGISTERS: Set[str] = {"R0", "R1", "R2", "R3", "R4", "R5", "R6", "R7"}
 
-    def __init__(self, mock_mode: bool = True, model_path: Optional[str] = None):
+    def __init__(self, mock_mode: bool = True, model_path: Optional[str] = None,
+                 neural_mode: bool = False):
         self.mock_mode = mock_mode
+        self.neural_mode = neural_mode
         self.model_path = model_path
         self.labels: Dict[str, int] = {}
         self._model = None
         self._tokenizer = None
+        self._neural_model = None
 
-        if not mock_mode and model_path is None:
-            raise ValueError("model_path required when mock_mode=False")
+        if not mock_mode and not neural_mode and model_path is None:
+            raise ValueError("model_path required when mock_mode=False and neural_mode=False")
 
     def set_labels(self, labels: Dict[str, int]) -> None:
         self.labels = labels
@@ -109,6 +115,22 @@ class Decoder:
         self._model = None
         self._tokenizer = None
 
+    def load_neural(self, model_path: Optional[str] = None) -> None:
+        """Load the trained neural decoder model (~50K params CNN)."""
+        import torch
+        from ncpu.model.architectures import InstructionDecoderNet
+
+        raw_path = model_path or self.model_path or "models/decode"
+        p = Path(raw_path)
+        path = str(p / "decode.pt") if p.is_dir() else str(p)
+        model = InstructionDecoderNet()
+        state = torch.load(path, map_location="cpu", weights_only=True)
+        model.load_state_dict(state)
+        device = "mps" if torch.backends.mps.is_available() else "cpu"
+        model = model.to(device).eval()
+        self._neural_model = model
+        self.neural_mode = True
+
     def decode(self, instruction: str) -> DecodeResult:
         """Decode an instruction to operation key and parameters."""
         instruction = instruction.strip()
@@ -121,8 +143,110 @@ class Decoder:
 
         if self.mock_mode:
             return self._mock_decode(instruction)
+        elif self.neural_mode:
+            return self._neural_decode(instruction)
         else:
             return self._llm_decode(instruction)
+
+    # -- Neural Mode (trained CNN classifier) --
+
+    def _neural_decode(self, instruction: str) -> DecodeResult:
+        """Decode using the trained neural opcode classifier.
+
+        1. CNN classifies instruction text → opcode
+        2. Deterministic extractor pulls operands based on opcode format
+        (Exactly like a real CPU: opcode bits → format → operand fields)
+        """
+        import torch
+        from ncpu.model.architectures import InstructionDecoderNet
+
+        if self._neural_model is None:
+            self.load_neural()
+
+        x = InstructionDecoderNet.encode_instruction(instruction).unsqueeze(0)
+        device = next(self._neural_model.parameters()).device
+        x = x.to(device)
+
+        with torch.no_grad():
+            logits = self._neural_model(x)
+            pred_idx = logits.argmax(dim=1).item()
+
+        opcode = InstructionDecoderNet.OPCODES[pred_idx]
+
+        # Extract operands deterministically based on opcode format
+        params = self._extract_operands(instruction, opcode)
+        if params is None:
+            return DecodeResult(
+                "OP_INVALID", {"raw": instruction}, False,
+                error=f"Operand extraction failed for {opcode}",
+                raw_instruction=instruction
+            )
+
+        return DecodeResult(opcode, params, True, raw_instruction=instruction)
+
+    def _extract_operands(self, instruction: str, opcode: str) -> Optional[Dict]:
+        """Extract operands deterministically based on opcode format.
+
+        Once the neural model identifies the opcode, operand positions
+        are determined by the instruction format — just like a real CPU
+        reads register/immediate fields from fixed bit positions.
+        """
+        instr = instruction.upper().strip()
+        instr = re.sub(r'\s+', ' ', instr)
+        instr = re.sub(r'\s*,\s*', ',', instr)
+
+        # Remove the mnemonic to get the operand string
+        parts = instr.split(None, 1)
+        operands_str = parts[1] if len(parts) > 1 else ""
+        operands = [op.strip() for op in operands_str.replace(',', ' ').split()]
+
+        try:
+            if opcode in ("OP_HALT", "OP_NOP"):
+                return {}
+
+            if opcode == "OP_INVALID":
+                return {"raw": instruction}
+
+            if opcode == "OP_MOV_REG_IMM":
+                if len(operands) >= 2 and operands[0] in self.REGISTERS:
+                    return {"dest": operands[0], "value": self._parse_immediate(operands[1])}
+
+            if opcode == "OP_MOV_REG_REG":
+                if len(operands) >= 2 and operands[0] in self.REGISTERS and operands[1] in self.REGISTERS:
+                    return {"dest": operands[0], "src": operands[1]}
+
+            if opcode in ("OP_ADD", "OP_SUB", "OP_MUL", "OP_DIV",
+                          "OP_AND", "OP_OR", "OP_XOR"):
+                if len(operands) >= 3:
+                    return {"dest": operands[0], "src1": operands[1], "src2": operands[2]}
+
+            if opcode in ("OP_SHL", "OP_SHR"):
+                if len(operands) >= 3:
+                    params = {"dest": operands[0], "src": operands[1]}
+                    if operands[2] in self.REGISTERS:
+                        params["amount_reg"] = operands[2]
+                    else:
+                        params["amount"] = self._parse_immediate(operands[2])
+                    return params
+
+            if opcode in ("OP_INC", "OP_DEC"):
+                if len(operands) >= 1 and operands[0] in self.REGISTERS:
+                    return {"dest": operands[0]}
+
+            if opcode == "OP_CMP":
+                if len(operands) >= 2:
+                    return {"src1": operands[0], "src2": operands[1]}
+
+            if opcode in ("OP_JMP", "OP_JZ", "OP_JNZ", "OP_JS", "OP_JNS"):
+                if operands:
+                    addr = self._resolve_address(operands[0])
+                    if addr is not None:
+                        return {"addr": addr}
+
+        except (ValueError, IndexError):
+            pass
+
+        return None
 
     # -- Mock Mode (rule-based regex) --
 

@@ -35,6 +35,8 @@ PACKAGE CONTENTS:
 - ExecutionResult: Dataclass for execution results
 - create_cpu(): Convenience function to create CPU instance
 - KERNEL_HEADER, KERNEL_SOURCE: Raw Metal shader source code
+- NCPUComputeKernel: nCPU ISA compute kernel (qemu-style GPU execution)
+- ComputeResult: Dataclass for compute kernel results
 
 Author: KVRM Project
 Date: 2024
@@ -58,13 +60,48 @@ from .cpu_kernel_source import (
     get_full_kernel_source,
 )
 
+from .cpu_kernel_v2 import (
+    MLXKernelCPUv2,
+    StopReasonV2,
+    ExecutionResultV2,
+    create_cpu_v2,
+)
+
+from .ncpu_kernel import (
+    NCPUComputeKernel,
+    ComputeResult,
+)
+
+from .ncpu_kernel_source import (
+    NCPU_KERNEL_HEADER,
+    NCPU_KERNEL_SOURCE,
+    NCPU_STOP_RUNNING,
+    NCPU_STOP_HALT,
+    NCPU_STOP_MAX_CYCLES,
+)
+
+from .muxleq_kernel import (
+    MuxleqVM,
+    MuxleqResult,
+)
+
+from .muxleq_kernel_source import (
+    MUXLEQ_KERNEL_HEADER,
+    MUXLEQ_KERNEL_SOURCE,
+    MUXLEQ_STOP_RUNNING,
+    MUXLEQ_STOP_HALT,
+    MUXLEQ_STOP_MAX_CYCLES,
+    MUXLEQ_STOP_IO_READ,
+    MUXLEQ_STOP_IO_WRITE,
+)
+
 __all__ = [
-    # Main classes
+    # ARM64 kernel classes
     'MLXKernelCPU',
     'StopReason',
     'ExecutionResult',
     'create_cpu',
-    # Kernel source
+    # ARM64 kernel source
     'KERNEL_HEADER',
     'KERNEL_SOURCE',
     'STOP_RUNNING',
@@ -73,6 +110,29 @@ __all__ = [
     'STOP_MAX_CYCLES',
     'get_kernel_source',
     'get_full_kernel_source',
+    # ARM64 kernel V2 (125-instruction, double-buffer memory)
+    'MLXKernelCPUv2',
+    'StopReasonV2',
+    'ExecutionResultV2',
+    'create_cpu_v2',
+    # nCPU ISA compute kernel
+    'NCPUComputeKernel',
+    'ComputeResult',
+    'NCPU_KERNEL_HEADER',
+    'NCPU_KERNEL_SOURCE',
+    'NCPU_STOP_RUNNING',
+    'NCPU_STOP_HALT',
+    'NCPU_STOP_MAX_CYCLES',
+    # MUXLEQ VM
+    'MuxleqVM',
+    'MuxleqResult',
+    'MUXLEQ_KERNEL_HEADER',
+    'MUXLEQ_KERNEL_SOURCE',
+    'MUXLEQ_STOP_RUNNING',
+    'MUXLEQ_STOP_HALT',
+    'MUXLEQ_STOP_MAX_CYCLES',
+    'MUXLEQ_STOP_IO_READ',
+    'MUXLEQ_STOP_IO_WRITE',
 ]
 
-__version__ = '1.0.0'
+__version__ = '1.1.0'

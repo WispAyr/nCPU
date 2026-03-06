@@ -1,0 +1,120 @@
+{
+  "timestamp": "2026-03-06T18:35:38.618398+00:00",
+  "system": {
+    "platform": "macOS-15.5-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "processor": "arm",
+    "python_version": "3.14.2",
+    "python_implementation": "CPython",
+    "mlx_version": "0.31.0",
+    "torch_version": "2.10.0"
+  },
+  "config": {
+    "max_compile_cycles": 200000000,
+    "max_exec_cycles": 10000000
+  },
+  "compiler": {
+    "source": "cc.c",
+    "binary_size": 41928
+  },
+  "programs": [
+    {
+      "name": "arithmetic",
+      "compile_cycles": 45382,
+      "compile_wall_ms": 21941.3,
+      "exec_cycles": 21,
+      "exec_wall_ms": 1060.86,
+      "binary_size": 92,
+      "exit_code": 55,
+      "expected": 55,
+      "correct": true
+    },
+    {
+      "name": "fibonacci",
+      "compile_cycles": 64507,
+      "compile_wall_ms": 22409.53,
+      "exec_cycles": 242,
+      "exec_wall_ms": 1061.29,
+      "binary_size": 264,
+      "exit_code": 55,
+      "expected": 55,
+      "correct": true
+    },
+    {
+      "name": "factorial",
+      "compile_cycles": 49604,
+      "compile_wall_ms": 22396.54,
+      "exec_cycles": 132,
+      "exec_wall_ms": 1050.55,
+      "binary_size": 192,
+      "exit_code": 120,
+      "expected": 120,
+      "correct": true
+    },
+    {
+      "name": "array",
+      "compile_cycles": 67142,
+      "compile_wall_ms": 22435.24,
+      "exec_cycles": 268,
+      "exec_wall_ms": 1063.51,
+      "binary_size": 624,
+      "exit_code": 150,
+      "expected": 150,
+      "correct": true
+    },
+    {
+      "name": "forloop",
+      "compile_cycles": 49858,
+      "compile_wall_ms": 22706.19,
+      "exec_cycles": 193,
+      "exec_wall_ms": 1078.39,
+      "binary_size": 144,
+      "exit_code": 55,
+      "expected": 55,
+      "correct": true
+    },
+    {
+      "name": "pointers",
+      "compile_cycles": 45668,
+      "compile_wall_ms": 22649.63,
+      "exec_cycles": 29,
+      "exec_wall_ms": 1079.61,
+      "binary_size": 124,
+      "exit_code": 123,
+      "expected": 123,
+      "correct": true
+    },
+    {
+      "name": "nested_calls",
+      "compile_cycles": 54481,
+      "compile_wall_ms": 22806.42,
+      "exec_cycles": 55,
+      "exec_wall_ms": 1072.1,
+      "binary_size": 236,
+      "exit_code": 23,
+      "expected": 23,
+      "correct": true
+    },
+    {
+      "name": "control_flow",
+      "compile_cycles": 52789,
+      "compile_wall_ms": 22802.29,
+      "exec_cycles": 283,
+      "exec_wall_ms": 1073.13,
+      "binary_size": 172,
+      "exit_code": 55,
+      "expected": 55,
+      "correct": true
+    }
+  ],
+  "summary": {
+    "total_programs": 8,
+    "compiled": 8,
+    "correct": 8,
+    "mean_compile_cycles": 53679,
+    "mean_compile_wall_ms": 22518.39,
+    "mean_exec_cycles": 153,
+    "mean_exec_wall_ms": 1067.43,
+    "mean_binary_size": 231
+  }
+}

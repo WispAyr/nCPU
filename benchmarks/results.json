@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-03-02T23:46:56-0500",
+  "timestamp": "2026-03-03T23:28:29-0500",
   "config": {
     "n_iterations": 1000,
     "warmup_iterations": 50,
@@ -35,135 +35,297 @@
     "LOG": true,
     "ATAN2": true
   },
-  "model_load_time_ms": 59.5,
+  "model_load_time_ms": 41.8,
   "operation_benchmarks": {
     "add": {
-      "mean_us": 248.433371,
-      "median_us": 246.4375,
-      "p99_us": 308.92657999999983,
-      "min_us": 221.541,
-      "max_us": 517.792,
-      "stdev_us": 20.367637288209526
+      "mean_us": 258.555566,
+      "median_us": 256.125,
+      "p99_us": 345.41084,
+      "min_us": 231.916,
+      "max_us": 419.458,
+      "stdev_us": 19.81821888034425
     },
     "sub": {
-      "mean_us": 246.361487,
-      "median_us": 247.0,
-      "p99_us": 286.76207999999997,
-      "min_us": 223.834,
-      "max_us": 340.5,
-      "stdev_us": 13.64072328271146
+      "mean_us": 261.836158,
+      "median_us": 258.125,
+      "p99_us": 384.27666,
+      "min_us": 237.833,
+      "max_us": 593.917,
+      "stdev_us": 24.53312797237941
     },
     "mul": {
-      "mean_us": 21.420217,
-      "median_us": 21.375,
-      "p99_us": 27.29408,
-      "min_us": 17.041,
-      "max_us": 52.833,
-      "stdev_us": 2.2604821258643812
+      "mean_us": 24.810419,
+      "median_us": 23.709,
+      "p99_us": 34.65040999999998,
+      "min_us": 18.917,
+      "max_us": 206.917,
+      "stdev_us": 8.820502805122516
     },
     "and_": {
-      "mean_us": 21.396328,
-      "median_us": 21.2705,
-      "p99_us": 30.083,
-      "min_us": 18.959,
-      "max_us": 48.208,
-      "stdev_us": 2.33069176480257
+      "mean_us": 23.304982,
+      "median_us": 22.3125,
+      "p99_us": 48.049499999999995,
+      "min_us": 20.417,
+      "max_us": 193.417,
+      "stdev_us": 8.137036407757874
     },
     "or_": {
-      "mean_us": 21.768954,
-      "median_us": 21.542,
-      "p99_us": 29.12708,
-      "min_us": 18.833,
-      "max_us": 70.209,
-      "stdev_us": 2.4751077201023213
+      "mean_us": 22.72673,
+      "median_us": 21.75,
+      "p99_us": 30.37542,
+      "min_us": 20.291,
+      "max_us": 113.5,
+      "stdev_us": 5.055848243030694
     },
     "xor_": {
-      "mean_us": 21.235525,
-      "median_us": 21.292,
-      "p99_us": 28.094259999999988,
-      "min_us": 18.833,
-      "max_us": 47.417,
-      "stdev_us": 2.157335469439721
+      "mean_us": 23.081557,
+      "median_us": 22.8125,
+      "p99_us": 30.10523999999998,
+      "min_us": 20.291,
+      "max_us": 131.542,
+      "stdev_us": 4.2096198888212415
     },
     "shl": {
-      "mean_us": 437.329996,
-      "median_us": 429.64599999999996,
-      "p99_us": 618.0568400000001,
-      "min_us": 320.167,
-      "max_us": 909.458,
-      "stdev_us": 53.79843129465533
+      "mean_us": 436.9025,
+      "median_us": 434.08349999999996,
+      "p99_us": 568.5451800000001,
+      "min_us": 310.584,
+      "max_us": 632.542,
+      "stdev_us": 54.934299987394986
     },
     "shr": {
-      "mean_us": 431.226086,
-      "median_us": 426.5,
-      "p99_us": 539.9460100000001,
-      "min_us": 322.834,
-      "max_us": 1655.834,
-      "stdev_us": 60.36682724041142
+      "mean_us": 460.334344,
+      "median_us": 452.9585,
+      "p99_us": 690.4494999999998,
+      "min_us": 306.25,
+      "max_us": 1055.666,
+      "stdev_us": 72.55270414959791
     },
     "cmp": {
-      "mean_us": 249.142822,
-      "median_us": 249.04149999999998,
-      "p99_us": 291.70865999999995,
-      "min_us": 222.541,
-      "max_us": 392.75,
-      "stdev_us": 14.958883493084492
+      "mean_us": 258.972078,
+      "median_us": 258.583,
+      "p99_us": 328.95883000000003,
+      "min_us": 237.167,
+      "max_us": 421.167,
+      "stdev_us": 15.946600398774473
     },
     "sin": {
-      "mean_us": 47.844671,
-      "median_us": 47.3955,
-      "p99_us": 61.88749999999999,
-      "min_us": 43.666,
-      "max_us": 89.416,
-      "stdev_us": 3.0286472480155084
+      "mean_us": 50.063513,
+      "median_us": 48.5205,
+      "p99_us": 72.71924999999999,
+      "min_us": 44.125,
+      "max_us": 210.291,
+      "stdev_us": 8.517515084873759
     },
     "cos": {
-      "mean_us": 47.75814,
-      "median_us": 47.584,
-      "p99_us": 53.58342,
-      "min_us": 44.25,
-      "max_us": 62.542,
-      "stdev_us": 1.5309258055902717
+      "mean_us": 49.995059,
+      "median_us": 48.625,
+      "p99_us": 79.83941,
+      "min_us": 44.0,
+      "max_us": 175.708,
+      "stdev_us": 6.810131379858243
     },
     "sqrt": {
-      "mean_us": 522.034248,
-      "median_us": 521.1045,
-      "p99_us": 595.81074,
-      "min_us": 402.0,
-      "max_us": 626.459,
-      "stdev_us": 27.869084125648953
+      "mean_us": 544.041538,
+      "median_us": 546.5415,
+      "p99_us": 748.34524,
+      "min_us": 390.542,
+      "max_us": 926.958,
+      "stdev_us": 56.39937580407824
     },
     "exp_": {
-      "mean_us": 20.560406,
-      "median_us": 19.75,
-      "p99_us": 23.62541,
-      "min_us": 18.125,
-      "max_us": 35.542,
-      "stdev_us": 1.555803135541435
+      "mean_us": 20.927829,
+      "median_us": 20.083,
+      "p99_us": 24.91824,
+      "min_us": 18.458,
+      "max_us": 41.625,
+      "stdev_us": 1.6481410524247273
     },
     "log_": {
-      "mean_us": 20.459168,
-      "median_us": 19.625,
-      "p99_us": 23.836329999999993,
-      "min_us": 18.916,
-      "max_us": 34.167,
-      "stdev_us": 1.4245798494726518
+      "mean_us": 22.062909,
+      "median_us": 22.5,
+      "p99_us": 26.753749999999997,
+      "min_us": 19.208,
+      "max_us": 69.416,
+      "stdev_us": 2.472139959366722
     },
     "atan2": {
-      "mean_us": 934.759653,
-      "median_us": 917.7705000000001,
-      "p99_us": 1110.853,
-      "min_us": 837.042,
-      "max_us": 1210.209,
-      "stdev_us": 60.68033612852901
+      "mean_us": 1046.626148,
+      "median_us": 1040.667,
+      "p99_us": 1401.2782399999996,
+      "min_us": 774.25,
+      "max_us": 3149.75,
+      "stdev_us": 144.37314465019554
     }
   },
   "program_benchmarks": [
     {
+      "program": "absolute_value.asm",
+      "instructions": 8,
+      "cycles": 7,
+      "wall_time_ms": 1.314,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": -25,
+        "R1": 25,
+        "R2": 0,
+        "R3": 0,
+        "R4": 0,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "all_nops.asm",
+      "instructions": 11,
+      "cycles": 11,
+      "wall_time_ms": 0.12,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 0,
+        "R1": 0,
+        "R2": 0,
+        "R3": 0,
+        "R4": 0,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "arithmetic_series.asm",
+      "instructions": 13,
+      "cycles": 39,
+      "wall_time_ms": 6.338,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 5,
+        "R1": 5,
+        "R2": 75,
+        "R3": 5,
+        "R4": 5,
+        "R5": 30,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "array_sum.asm",
+      "instructions": 10,
+      "cycles": 10,
+      "wall_time_ms": 1.371,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 10,
+        "R1": 20,
+        "R2": 30,
+        "R3": 40,
+        "R4": 50,
+        "R5": 0,
+        "R6": 0,
+        "R7": 150
+      }
+    },
+    {
+      "program": "average.asm",
+      "instructions": 9,
+      "cycles": 9,
+      "wall_time_ms": 2.042,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 10,
+        "R1": 20,
+        "R2": 30,
+        "R3": 40,
+        "R4": 100,
+        "R5": 25,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "binary_to_bcd.asm",
+      "instructions": 10,
+      "cycles": 27,
+      "wall_time_ms": 4.063,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 7,
+        "R1": 10,
+        "R2": 4,
+        "R3": 7,
+        "R4": 0,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "bit_rotate_left.asm",
+      "instructions": 7,
+      "cycles": 7,
+      "wall_time_ms": 1.468,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 150,
+        "R1": 255,
+        "R2": 88,
+        "R3": 90,
+        "R4": 0,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "bitfield_extract.asm",
+      "instructions": 5,
+      "cycles": 5,
+      "wall_time_ms": 1.084,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 83,
+        "R1": 7,
+        "R2": 5,
+        "R3": 5,
+        "R4": 0,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "bitmask_create.asm",
+      "instructions": 9,
+      "cycles": 9,
+      "wall_time_ms": 3.3,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 1,
+        "R1": 1,
+        "R2": 31,
+        "R3": 0,
+        "R4": 255,
+        "R5": 7,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
       "program": "bitwise.asm",
       "instructions": 10,
       "cycles": 10,
-      "wall_time_ms": 2.258,
+      "wall_time_ms": 1.948,
       "status": "ok",
       "error": null,
       "final_registers": {
@@ -178,10 +340,136 @@
       }
     },
     {
+      "program": "bubble_sort_step.asm",
+      "instructions": 28,
+      "cycles": 46,
+      "wall_time_ms": 5.251,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 3,
+        "R1": 5,
+        "R2": 7,
+        "R3": 9,
+        "R4": 0,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "clamp.asm",
+      "instructions": 36,
+      "cycles": 22,
+      "wall_time_ms": 1.833,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 10,
+        "R1": 200,
+        "R2": -5,
+        "R3": 10,
+        "R4": 300,
+        "R5": 50,
+        "R6": 200,
+        "R7": 50
+      }
+    },
+    {
+      "program": "collatz.asm",
+      "instructions": 18,
+      "cycles": 74,
+      "wall_time_ms": 12.598,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 1,
+        "R1": 8,
+        "R2": 1,
+        "R3": 3,
+        "R4": 0,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "compare_and_swap.asm",
+      "instructions": 11,
+      "cycles": 10,
+      "wall_time_ms": 0.553,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 99,
+        "R1": 42,
+        "R2": 99,
+        "R3": 1,
+        "R4": 0,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "count_bits_set.asm",
+      "instructions": 13,
+      "cycles": 68,
+      "wall_time_ms": 13.064,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 0,
+        "R1": 5,
+        "R2": 1,
+        "R3": 0,
+        "R4": 1,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "count_down_by_three.asm",
+      "instructions": 11,
+      "cycles": 67,
+      "wall_time_ms": 9.291,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 0,
+        "R1": 10,
+        "R2": 3,
+        "R3": 0,
+        "R4": 0,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "count_leading_zeros.asm",
+      "instructions": 14,
+      "cycles": 27,
+      "wall_time_ms": 4.686,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 53,
+        "R1": 2,
+        "R2": 32,
+        "R3": 8,
+        "R4": 0,
+        "R5": 32,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
       "program": "countdown.asm",
       "instructions": 6,
       "cycles": 36,
-      "wall_time_ms": 6.941,
+      "wall_time_ms": 6.474,
       "status": "ok",
       "error": null,
       "final_registers": {
@@ -199,7 +487,7 @@
       "program": "countup_to_negative.asm",
       "instructions": 8,
       "cycles": 44,
-      "wall_time_ms": 9.1,
+      "wall_time_ms": 8.636,
       "status": "ok",
       "error": null,
       "final_registers": {
@@ -214,10 +502,64 @@
       }
     },
     {
+      "program": "divmod.asm",
+      "instructions": 10,
+      "cycles": 32,
+      "wall_time_ms": 4.984,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 47,
+        "R1": 9,
+        "R2": 5,
+        "R3": 2,
+        "R4": 0,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "euclidean_distance_sq.asm",
+      "instructions": 10,
+      "cycles": 10,
+      "wall_time_ms": 1.133,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 1,
+        "R1": 2,
+        "R2": 4,
+        "R3": 6,
+        "R4": 25,
+        "R5": 9,
+        "R6": 16,
+        "R7": 0
+      }
+    },
+    {
+      "program": "factorial.asm",
+      "instructions": 9,
+      "cycles": 29,
+      "wall_time_ms": 3.843,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 5040,
+        "R1": 1,
+        "R2": 1,
+        "R3": 1,
+        "R4": 0,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
       "program": "fibonacci.asm",
       "instructions": 12,
       "cycles": 66,
-      "wall_time_ms": 8.98,
+      "wall_time_ms": 9.157,
       "status": "ok",
       "error": null,
       "final_registers": {
@@ -232,10 +574,298 @@
       }
     },
     {
+      "program": "fibonacci_iterative.asm",
+      "instructions": 12,
+      "cycles": 63,
+      "wall_time_ms": 6.166,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 34,
+        "R1": 55,
+        "R2": 60,
+        "R3": 89,
+        "R4": 0,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "fibonacci_sum.asm",
+      "instructions": 14,
+      "cycles": 80,
+      "wall_time_ms": 10.899,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 34,
+        "R1": 55,
+        "R2": 88,
+        "R3": 9,
+        "R4": 9,
+        "R5": 55,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "find_first_set.asm",
+      "instructions": 14,
+      "cycles": 27,
+      "wall_time_ms": 5.17,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 53,
+        "R1": 3,
+        "R2": 1,
+        "R3": 0,
+        "R4": 1,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "gcd.asm",
+      "instructions": 10,
+      "cycles": 20,
+      "wall_time_ms": 2.297,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 12,
+        "R1": 12,
+        "R2": 0,
+        "R3": 0,
+        "R4": 0,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "gray_code.asm",
+      "instructions": 10,
+      "cycles": 10,
+      "wall_time_ms": 3.363,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 5,
+        "R1": 2,
+        "R2": 13,
+        "R3": 0,
+        "R4": 7,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "instruction_test.asm",
+      "instructions": 41,
+      "cycles": 38,
+      "wall_time_ms": 13.165,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 7,
+        "R1": 3,
+        "R2": 1,
+        "R3": 1,
+        "R4": 1,
+        "R5": 16,
+        "R6": 8,
+        "R7": 0
+      }
+    },
+    {
+      "program": "is_even_odd.asm",
+      "instructions": 6,
+      "cycles": 6,
+      "wall_time_ms": 0.18,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 7,
+        "R1": 0,
+        "R2": 1,
+        "R3": 1,
+        "R4": 0,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "is_power_of_2.asm",
+      "instructions": 19,
+      "cycles": 16,
+      "wall_time_ms": 1.578,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 65,
+        "R1": 1,
+        "R2": 1,
+        "R3": 0,
+        "R4": 64,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "isqrt.asm",
+      "instructions": 12,
+      "cycles": 71,
+      "wall_time_ms": 7.114,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 100,
+        "R1": 10,
+        "R2": 1,
+        "R3": 11,
+        "R4": 121,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "led_pattern.asm",
+      "instructions": 17,
+      "cycles": 81,
+      "wall_time_ms": 22.796,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 1,
+        "R1": 7,
+        "R2": 7,
+        "R3": 128,
+        "R4": 1,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "linear_search.asm",
+      "instructions": 30,
+      "cycles": 20,
+      "wall_time_ms": 1.586,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 10,
+        "R1": 25,
+        "R2": 33,
+        "R3": 42,
+        "R4": 50,
+        "R5": 42,
+        "R6": 3,
+        "R7": 1
+      }
+    },
+    {
+      "program": "matrix_element.asm",
+      "instructions": 8,
+      "cycles": 8,
+      "wall_time_ms": 0.761,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 1,
+        "R1": 2,
+        "R2": 3,
+        "R3": 3,
+        "R4": 5,
+        "R5": 1,
+        "R6": 6,
+        "R7": 0
+      }
+    },
+    {
+      "program": "max_of_two.asm",
+      "instructions": 8,
+      "cycles": 6,
+      "wall_time_ms": 0.415,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 17,
+        "R1": 42,
+        "R2": 42,
+        "R3": 0,
+        "R4": 0,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "memory_copy.asm",
+      "instructions": 9,
+      "cycles": 9,
+      "wall_time_ms": 0.136,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 10,
+        "R1": 20,
+        "R2": 30,
+        "R3": 40,
+        "R4": 10,
+        "R5": 20,
+        "R6": 30,
+        "R7": 40
+      }
+    },
+    {
+      "program": "min_of_two.asm",
+      "instructions": 9,
+      "cycles": 6,
+      "wall_time_ms": 0.497,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 17,
+        "R1": 42,
+        "R2": 17,
+        "R3": 0,
+        "R4": 0,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "modulo.asm",
+      "instructions": 8,
+      "cycles": 14,
+      "wall_time_ms": 1.752,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 17,
+        "R1": 7,
+        "R2": 3,
+        "R3": 0,
+        "R4": 0,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
       "program": "multiply.asm",
       "instructions": 10,
       "cycles": 30,
-      "wall_time_ms": 5.456,
+      "wall_time_ms": 5.31,
       "status": "ok",
       "error": null,
       "final_registers": {
@@ -250,10 +880,118 @@
       }
     },
     {
+      "program": "multiply_by_constant.asm",
+      "instructions": 5,
+      "cycles": 5,
+      "wall_time_ms": 1.581,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 17,
+        "R1": 136,
+        "R2": 170,
+        "R3": 0,
+        "R4": 0,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "multiply_russian.asm",
+      "instructions": 15,
+      "cycles": 43,
+      "wall_time_ms": 9.602,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 0,
+        "R1": 224,
+        "R2": 154,
+        "R3": 1,
+        "R4": 0,
+        "R5": 1,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "parity.asm",
+      "instructions": 10,
+      "cycles": 10,
+      "wall_time_ms": 2.892,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 204,
+        "R1": 0,
+        "R2": 1,
+        "R3": 0,
+        "R4": 0,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "polynomial_eval.asm",
+      "instructions": 9,
+      "cycles": 9,
+      "wall_time_ms": 0.827,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 136,
+        "R1": 7,
+        "R2": 2,
+        "R3": 5,
+        "R4": 3,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "popcount.asm",
+      "instructions": 11,
+      "cycles": 31,
+      "wall_time_ms": 4.301,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 0,
+        "R1": 4,
+        "R2": 1,
+        "R3": 0,
+        "R4": 127,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "power.asm",
+      "instructions": 10,
+      "cycles": 32,
+      "wall_time_ms": 3.55,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 3,
+        "R1": 5,
+        "R2": 243,
+        "R3": 5,
+        "R4": 0,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
       "program": "power_of_two.asm",
       "instructions": 9,
       "cycles": 37,
-      "wall_time_ms": 9.7,
+      "wall_time_ms": 10.505,
       "status": "ok",
       "error": null,
       "final_registers": {
@@ -268,10 +1006,136 @@
       }
     },
     {
+      "program": "pwm_duty_cycle.asm",
+      "instructions": 21,
+      "cycles": 105,
+      "wall_time_ms": 20.177,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 4,
+        "R1": 3,
+        "R2": 238,
+        "R3": 8,
+        "R4": 8,
+        "R5": 0,
+        "R6": 1,
+        "R7": 0
+      }
+    },
+    {
+      "program": "reverse_byte.asm",
+      "instructions": 14,
+      "cycles": 72,
+      "wall_time_ms": 17.899,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 0,
+        "R1": 180,
+        "R2": 8,
+        "R3": 8,
+        "R4": 1,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "saturating_add.asm",
+      "instructions": 16,
+      "cycles": 14,
+      "wall_time_ms": 1.415,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 200,
+        "R1": 100,
+        "R2": 255,
+        "R3": 255,
+        "R4": 100,
+        "R5": 50,
+        "R6": 150,
+        "R7": 0
+      }
+    },
+    {
+      "program": "shift_accumulate.asm",
+      "instructions": 8,
+      "cycles": 8,
+      "wall_time_ms": 2.079,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 171,
+        "R1": 10,
+        "R2": 11,
+        "R3": 0,
+        "R4": 0,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "sign_function.asm",
+      "instructions": 11,
+      "cycles": 8,
+      "wall_time_ms": 0.516,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": -42,
+        "R1": -1,
+        "R2": 0,
+        "R3": 0,
+        "R4": 0,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "simple_hash.asm",
+      "instructions": 8,
+      "cycles": 8,
+      "wall_time_ms": 0.538,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 42,
+        "R1": 31,
+        "R2": 29,
+        "R3": 7,
+        "R4": 255,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "string_length.asm",
+      "instructions": 27,
+      "cycles": 26,
+      "wall_time_ms": 3.349,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 72,
+        "R1": 101,
+        "R2": 108,
+        "R3": 108,
+        "R4": 111,
+        "R5": 0,
+        "R6": 0,
+        "R7": 5
+      }
+    },
+    {
       "program": "sum_1_to_10.asm",
       "instructions": 9,
       "cycles": 45,
-      "wall_time_ms": 8.98,
+      "wall_time_ms": 8.595,
       "status": "ok",
       "error": null,
       "final_registers": {
@@ -279,6 +1143,132 @@
         "R1": 11,
         "R2": 11,
         "R3": 1,
+        "R4": 0,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "sum_of_cubes.asm",
+      "instructions": 11,
+      "cycles": 34,
+      "wall_time_ms": 4.177,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 100,
+        "R1": 5,
+        "R2": 5,
+        "R3": 64,
+        "R4": 0,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "sum_of_squares.asm",
+      "instructions": 10,
+      "cycles": 42,
+      "wall_time_ms": 5.622,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 91,
+        "R1": 7,
+        "R2": 7,
+        "R3": 36,
+        "R4": 0,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "timer_countdown.asm",
+      "instructions": 16,
+      "cycles": 136,
+      "wall_time_ms": 21.094,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 4,
+        "R1": 5,
+        "R2": 20,
+        "R3": 4,
+        "R4": 5,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "toggle_bits.asm",
+      "instructions": 9,
+      "cycles": 9,
+      "wall_time_ms": 0.282,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 255,
+        "R1": 90,
+        "R2": 165,
+        "R3": 255,
+        "R4": 8,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "triangular_number.asm",
+      "instructions": 6,
+      "cycles": 6,
+      "wall_time_ms": 1.669,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 7,
+        "R1": 8,
+        "R2": 28,
+        "R3": 0,
+        "R4": 0,
+        "R5": 0,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "twos_complement.asm",
+      "instructions": 8,
+      "cycles": 8,
+      "wall_time_ms": 0.891,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 42,
+        "R1": 0,
+        "R2": -42,
+        "R3": 255,
+        "R4": 1,
+        "R5": 214,
+        "R6": 0,
+        "R7": 0
+      }
+    },
+    {
+      "program": "xor_swap.asm",
+      "instructions": 6,
+      "cycles": 6,
+      "wall_time_ms": 0.233,
+      "status": "ok",
+      "error": null,
+      "final_registers": {
+        "R0": 99,
+        "R1": 42,
+        "R2": 0,
+        "R3": 0,
         "R4": 0,
         "R5": 0,
         "R6": 0,

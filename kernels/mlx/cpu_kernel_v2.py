@@ -87,7 +87,7 @@ class MLXKernelCPUv2:
     After execution, memory_out becomes the new memory for the next call.
     """
 
-    def __init__(self, memory_size: int = 4 * 1024 * 1024):
+    def __init__(self, memory_size: int = 16 * 1024 * 1024):
         """Initialize CPU with given memory size."""
         self.memory_size = memory_size
 
@@ -143,7 +143,10 @@ class MLXKernelCPUv2:
     def set_register(self, reg: int, value: int) -> None:
         if reg == 31:
             return
-        self.registers = self.registers.at[reg].add(-self.registers[reg] + value)
+        # MLX array.at[].add() doesn't support int64 on GPU — use numpy roundtrip
+        regs_np = np.array(self.registers)
+        regs_np[reg] = value
+        self.registers = mx.array(regs_np, dtype=mx.int64)
         mx.eval(self.registers)
 
     def get_registers_numpy(self) -> np.ndarray:
@@ -306,7 +309,7 @@ class MLXKernelCPUv2:
 # CONVENIENCE FUNCTION
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def create_cpu_v2(memory_size: int = 4 * 1024 * 1024) -> MLXKernelCPUv2:
+def create_cpu_v2(memory_size: int = 16 * 1024 * 1024) -> MLXKernelCPUv2:
     """Create a new MLX kernel CPU V2 instance."""
     return MLXKernelCPUv2(memory_size=memory_size)
 

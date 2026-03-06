@@ -8,6 +8,7 @@ Usage:
     python main.py --program programs/fibonacci.asm --trace
     python main.py --inline "MOV R0, 42; HALT"
     python main.py --binary firmware.bin --fast
+    python main.py --program programs/fibonacci.asm --compute
 """
 
 import argparse
@@ -65,6 +66,82 @@ def run_neural(args):
                 print(f"{reg}={regs[reg]}")
 
     return 0 if cpu.is_halted() else 1
+
+
+def run_compute(args):
+    """Run on GPU compute shader (Metal) — qemu-style fetch-decode-execute on GPU."""
+    from kernels.mlx.ncpu_kernel import NCPUComputeKernel
+
+    kernel = NCPUComputeKernel()
+
+    if args.binary:
+        # ARM64 binary → use full 125-instruction MLX ARM64 kernel V2
+        from kernels.mlx.cpu_kernel_v2 import MLXKernelCPUv2
+        cpu = MLXKernelCPUv2()
+        binary_data = Path(args.binary).read_bytes()
+        cpu.load_program(binary_data, address=0)
+        cpu.set_pc(0)
+        if not args.quiet:
+            print(f"Loaded ARM64 binary: {args.binary} ({len(binary_data)} bytes)")
+            print("GPU Compute: ARM64 Metal kernel V2 (125 instructions, qemu-style)")
+            print("-" * 60)
+            print("Executing...")
+            print("-" * 60)
+
+        result = cpu.execute(max_cycles=args.max_cycles)
+
+        if not args.quiet:
+            print(f"\nCycles: {result.cycles:,}")
+            print(f"Elapsed: {result.elapsed_seconds * 1000:.2f} ms")
+            print(f"IPS: {result.ips:,.0f}")
+            print(f"Stop reason: {result.stop_reason_name}")
+            for i in range(31):
+                val = cpu.get_register(i)
+                if val != 0:
+                    print(f"  X{i} = {val}")
+        return 0
+
+    # nCPU ISA → assemble and run on Metal compute shader
+    if args.program:
+        source = Path(args.program).read_text()
+        if not args.quiet:
+            print(f"Loading program: {args.program}")
+    elif args.inline:
+        source = args.inline.replace(";", "\n")
+        if not args.quiet:
+            print("Running inline assembly")
+    else:
+        print("Error: --compute requires --program, --inline, or --binary")
+        return 1
+
+    kernel.load_program_from_asm(source)
+
+    if not args.quiet:
+        print("GPU Compute: nCPU ISA Metal kernel (qemu-style)")
+        print("-" * 60)
+        print("Executing...")
+        print("-" * 60)
+
+    result = kernel.execute(max_cycles=args.max_cycles)
+
+    if not args.quiet:
+        print(f"\nCycles: {result.cycles:,}")
+        print(f"Elapsed: {result.elapsed_seconds * 1000:.3f} ms")
+        print(f"IPS: {result.ips:,.0f}")
+        print(f"Stop reason: {result.stop_reason_name}")
+        regs = kernel.get_registers_dict()
+        flags = kernel.get_flags()
+        for name, val in sorted(regs.items()):
+            if val != 0:
+                print(f"  {name} = {val}")
+        print(f"  Flags: ZF={int(flags['ZF'])} SF={int(flags['SF'])}")
+    else:
+        regs = kernel.get_registers_dict()
+        for name in sorted(regs.keys()):
+            if regs[name] != 0:
+                print(f"{name}={regs[name]}")
+
+    return 0
 
 
 def run_fast(args):
@@ -133,6 +210,12 @@ Examples:
 
     # Run ARM64 binary on GPU tensor CPU (maximum speed)
     python main.py --binary firmware.bin --fast
+
+    # Run on GPU compute shader (Metal) — qemu-style, millions of IPS
+    python main.py --program programs/sum_1_to_10.asm --compute
+
+    # ARM64 binary on Metal compute shader
+    python main.py --binary firmware.bin --compute
         """
     )
 
@@ -141,6 +224,8 @@ Examples:
     parser.add_argument("--binary", "-b", type=str, help="Path to ARM64 binary (for --fast mode)")
     parser.add_argument("--fast", action="store_true",
                         help="GPU tensor mode: native tensor ops, maximum speed (requires --binary)")
+    parser.add_argument("--compute", action="store_true",
+                        help="GPU compute mode: Metal shader execution (nCPU ISA or ARM64 binary)")
     parser.add_argument("--device", type=str, default=None,
                         help="Device: cpu, cuda, mps (default: auto-detect)")
     parser.add_argument("--models-dir", type=str, default="models",
@@ -157,11 +242,13 @@ Examples:
     if not args.program and not args.inline and not args.binary:
         parser.error("One of --program, --inline, or --binary is required")
 
-    if args.fast:
+    if args.compute:
+        return run_compute(args)
+    elif args.fast:
         return run_fast(args)
     else:
         if args.binary:
-            parser.error("--binary requires --fast flag")
+            parser.error("--binary requires --fast or --compute flag")
         if not args.program and not args.inline:
             parser.error("Neural mode requires --program or --inline")
         return run_neural(args)
