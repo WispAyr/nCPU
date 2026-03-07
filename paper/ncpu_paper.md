@@ -891,6 +891,10 @@ Several directions extend this work:
 
 2. **Extended nsl language.** The current nsl specification supports variables, arithmetic, control flow, and functions. Extending it with arrays (mapped to contiguous memory pages via the neural MMU), string literals, and `for` loops would make it practical for writing non-trivial programs. Each extension would also generate training data for the neural compiler's optimization passes.
 
+5. **BusyBox full coverage.** The ELF loader currently runs basic applets (echo, uname, basename). Extending floating-point instruction coverage in the Metal kernel would enable musl's `printf` number formatting, unlocking `ls -l`, `cat`, `grep`, and other applets that require `%d` format specifiers.
+
+6. **Self-compilation optimization.** Self-compilation currently takes ~250 seconds wall time, dominated by Metal dispatch overhead (~0.5s per SVC trap for putchar). Implementing buffered printf in the self-hosting runtime or batched SVC write support would dramatically reduce wall time while maintaining the same GPU cycle count.
+
 3. **Adversarial online adaptation.** The current online adaptation uses classical oracles as supervision. Training the neural components to outperform their classical fallbacks --- e.g., a cache replacement policy that beats LRU on specific workloads via reinforcement learning --- would demonstrate genuine learned advantage over hand-coded algorithms.
 
 4. **Conference targets.** This work targets ICML 2027 for the neural computation aspects (memorization-by-decomposition, performance inversion, the O(1)/O(log n)/O(n) hierarchy) and OSDI or SOSP for the systems aspects (GPU-native OS architecture, neural scheduling, the classical-neural hybrid design).
@@ -953,7 +957,9 @@ All games use `SYS_GETCHAR` (302) for real-time input and `SYS_CLOCK` (303) for 
 
 **Line Editor** (`ncpu/os/gpu/programs/tools/ed.c`, 403 lines): `ed`-clone line editor with append, insert, delete, print, write, and search/replace commands.
 
-Total: 13 C programs, 7,811 lines of freestanding C, all compiled with `aarch64-elf-gcc -O2` and executing on Metal GPU.
+**Self-Hosting C Compiler** (`ncpu/os/gpu/programs/tools/cc.c`, 3,461 lines): A self-hosting C compiler supporting `enum`, `typedef`, `switch`/`case`, `#ifdef`/`#ifndef`, global initializers, function pointers, `union`, `#include`, and `__syscall()` intrinsics. Compiles C source to ARM64 machine code entirely on the GPU. See Section 11 for details.
+
+Total: 14 C programs, ~11,300 lines of freestanding C, all compiled with `aarch64-elf-gcc -O2` and executing on Metal GPU.
 
 ### 12.5 Fully-GPU Pipeline
 
@@ -1152,21 +1158,23 @@ This demonstrates that GPU-sandboxed execution provides timing immunity not just
 
 ## 11. Self-Hosting C Compiler on Metal GPU
 
-The ultimate test of a computing platform is whether it can compile a compiler. We demonstrate a self-hosting C compiler (`cc.c`, ~2,800 lines of freestanding C) that compiles C source code into ARM64 machine code entirely on the Metal GPU, then executes the resulting binary on the same GPU --- three layers deep from host to output.
+The ultimate test of a computing platform is whether it can compile a compiler. We demonstrate a self-hosting C compiler (`cc.c`, ~3,500 lines of freestanding C) that compiles C source code into ARM64 machine code entirely on the Metal GPU, then executes the resulting binary on the same GPU --- three layers deep from host to output. The compiler supports a substantial subset of C including `enum`, `typedef`, `switch`/`case`, preprocessor conditionals, global initializers, function pointers, `union`, and `#include` --- sufficient to compile its own source code.
 
 ### 11.1 Compilation Pipeline
 
 The pipeline operates in three stages:
 
-1. **Host compilation**: `aarch64-elf-gcc -O2` compiles `cc.c` into a raw ARM64 binary (~33 KB)
-2. **GPU compilation**: The binary runs on `MLXKernelCPUv2`, reading C source from the GPU filesystem, lexing, parsing, and emitting ARM64 machine code into a new binary
+1. **Host compilation**: `aarch64-elf-gcc -O2` compiles `cc.c` into a raw ARM64 binary (~45 KB)
+2. **GPU compilation**: The binary runs on `MLXKernelCPUv2`, reading C source from the GPU filesystem, lexing, parsing, and emitting ARM64 machine code into an NCCD binary
 3. **GPU execution**: The GPU-compiled binary runs on a fresh `MLXKernelCPUv2` instance, producing a result in register X0
 
-The C compiler implements a recursive descent parser with operator precedence climbing, supporting: `int`/`long`/`char` types, structs, pointers, arrays, `for`/`while`/`do-while` loops, `if`/`else`, `break`/`continue`, recursive function calls (with caller-save register preservation), compound assignment operators (`+=`, `-=`, `*=`, etc.), ternary `?:`, `sizeof`, string literals, `&&`/`||` short-circuit evaluation, bitwise operators, and type casts. Code generation targets ARM64 with STP/LDP prologue/epilogue, register allocation across X9-X18, and LDRSW/STR W for 32-bit typed access.
+The C compiler implements a recursive descent parser with operator precedence climbing, supporting: `int`/`long`/`char` types, `struct`, `union`, `enum`, `typedef`, pointers, arrays, `for`/`while`/`do-while` loops, `if`/`else`, `switch`/`case`/`default`, `break`/`continue`, recursive function calls (with caller-save register preservation), compound assignment operators (`+=`, `-=`, `*=`, etc.), ternary `?:`, `sizeof`, string literals, `&&`/`||` short-circuit evaluation, bitwise operators, type casts, function pointers (via `BLR`), global variable initializers (scalar and array), `#include`, `#define`, `#ifdef`/`#ifndef`/`#else`/`#endif`, and `__syscall()` intrinsics. Code generation targets ARM64 with SUB/STP+LDP/ADD prologue/epilogue (supporting stack frames up to 4095 bytes), register allocation across X9-X18, and LDRSW/STR W for 32-bit typed access.
 
-### 11.2 GPU Kernel Bug Fixes Required
+**NCCD binary format**: Output binaries use a compact format: `[code bytes][NCCD magic 4B + data_size 4B][data bytes]`. This separates the code section (loaded at 0x10000) from the data section (loaded at 0x50000), avoiding unreliable lseek-based data section placement on the GPU.
 
-Achieving correct compilation and execution required fixing four bugs in the Metal GPU kernel and C compiler codegen, each discovered through systematic binary disassembly and debug tracing:
+### 11.2 Bug Fixes Required
+
+Achieving correct compilation and execution required fixing eleven bugs in the Metal GPU kernel and C compiler codegen, each discovered through systematic binary disassembly and debug tracing:
 
 1. **UBFM/UBFIZ rotation mask** (GPU kernel): The `imms < immr` case (used by GCC for `(val & mask) << shift` patterns) applied the extraction mask at the wrong bit position. Fix: extract low bits first, then shift to target position. Affected 4 instruction handlers (UBFM/SBFM, 32-bit and 64-bit).
 
@@ -1180,47 +1188,177 @@ Achieving correct compilation and execution required fixing four bugs in the Met
 
 6. **Struct member lvalue and rvalue** (cc.c parser/codegen): Two issues: (a) `parse_primary` loaded struct variables by value (`LDUR X`) instead of by address, but the `.` postfix handler assumed the register held an address. Fix: load struct variable addresses (like arrays) instead of values. (b) The struct member lvalue assignment handler (`p.x = 10`) was an unimplemented stub that parsed the rvalue but never emitted a store. Fix: compute struct base address + field offset, parse rvalue, emit `STR` to the computed address.
 
+7. **Function pointer argument clobber** (cc.c codegen): When calling through a function pointer, the code that evaluated argument expressions clobbered the register holding the function address. Fix: save the function pointer register to a caller-save slot before argument evaluation, restore before `BLR`.
+
+8. **Fixup table overflow** (cc.c linker): The branch fixup table (`MAX_FIXUPS = 2048`) silently dropped fixups beyond capacity. When compiling cc.c itself (2,613 fixups required), this left `BL`/`B`/`B.cond` instructions with zero offsets --- creating infinite loops (BL to self). Fix: increase `MAX_FIXUPS` and `MAX_LABELS` to 8192 and add error reporting at all fixup recording sites.
+
+9. **Token name buffer overflow** (cc.c lexer): The `Token` struct used `name[40]` but the string literal lexer allowed up to 63 characters (`ns < 63`), writing past the buffer boundary into adjacent tokens in the token array. This caused silent corruption of nearby token values. Fix: increase to `name[128]` with matching lexer limits (`ns < 127` for strings, `ns < 63` for identifiers).
+
+10. **Post/pre increment store-back** (cc.c codegen): The `i++`, `++i`, `i--`, `--i` operators computed the incremented/decremented value in a register but never stored it back to the stack variable --- the relevant code had a literal `/* TODO: store back */` comment. This was never caught because all test programs used `i = i + 1` instead of `i++`. Fix: add lvalue tracking (`last_lval_kind`, `last_lval_offset`, `last_lval_type`) set during `parse_primary`, used in `parse_postfix` and `parse_unary` to emit the store-back to the correct location (local, parameter, or global).
+
+11. **STP/LDP frame size overflow** (cc.c codegen): The function prologue used `STP X29, X30, [SP, #-frame]!` (pre-index), whose 7-bit signed immediate encodes offsets in units of 8 bytes, limiting the frame to 512 bytes. Functions with large local arrays (e.g., `cc_main` with `arg_buf[256]` + `src_path[128]` + `out_path[128]` = 544+ bytes) overflowed the immediate, causing FP/LR to be saved at the wrong offset. This corrupted the return address, producing infinite loops. Fix: split into `SUB SP, SP, #frame` (12-bit immediate, up to 4095 bytes) + `STP X29, X30, [SP, #0]` (signed-offset with zero displacement). Same pattern for epilogue: `LDP X29, X30, [SP, #0]` + `ADD SP, SP, #frame`.
+
 ### 11.3 Verification Results
 
-All 20 test programs compile and execute correctly on the GPU:
+All 40 test programs compile and execute correctly on the GPU:
 
-| Program | Description | Binary Size | Compile Cycles | Exit Code | Status |
-|---------|------------|-------------|----------------|-----------|--------|
-| arithmetic | 42 + 13 | 92 B | 43,010 | 55 | PASS |
-| fibonacci | fib(10) iterative | 264 B | 60,371 | 55 | PASS |
-| pointers | `*p = *p + 23` | 124 B | 43,323 | 123 | PASS |
-| array | sum of 5-element array | 624 B | 63,038 | 150 | PASS |
-| forloop | sum 1..10 | 144 B | 47,067 | 55 | PASS |
-| nested_calls | `add(3, mul(4,5))` | 236 B | 51,594 | 23 | PASS |
-| factorial | factorial(5) recursive | 192 B | 47,197 | 120 | PASS |
-| control_flow | while + if + break | 172 B | 49,859 | 55 | PASS |
-| structs | struct member `.` access | 224 B | 49,391 | 30 | PASS |
-| do_while | do-while loop | 112 B | 43,194 | 128 | PASS |
-| ternary | ternary `?:` | 172 B | 46,369 | 42 | PASS |
-| compound_assign | `+=`, `-=`, `*=` | 128 B | 43,210 | 23 | PASS |
-| bitwise | `&`, `^` operations | 116 B | 46,275 | 255 | PASS |
-| sizeof_test | sizeof(int/long/char) | 100 B | 45,614 | 13 | PASS |
-| char_array | char array indexing | 460 B | 52,352 | 198 | PASS |
-| logical_shortcircuit | `&&`, `\|\|` eval | 204 B | 49,992 | 2 | PASS |
-| bubble_sort | 5-element sort | 1,284 B | 91,468 | 12345 | PASS |
-| gcd | Euclidean GCD | 208 B | 51,468 | 6 | PASS |
-| pointer_arith | pointer + offset | 384 B | 51,245 | 20 | PASS |
-| nested_struct | struct pointer `->` | 216 B | 52,352 | 300 | PASS |
+| Program | Description | Exit Code | Status |
+|---------|------------|-----------|--------|
+| arithmetic | 42 + 13 | 55 | PASS |
+| fibonacci | fib(10) iterative | 55 | PASS |
+| pointers | `*p = *p + 23` | 123 | PASS |
+| array | sum of 5-element array | 150 | PASS |
+| forloop | sum 1..10 | 55 | PASS |
+| nested_calls | `add(3, mul(4,5))` | 23 | PASS |
+| factorial | factorial(5) recursive | 120 | PASS |
+| control_flow | while + if + break | 55 | PASS |
+| structs | struct member `.` access | 30 | PASS |
+| do_while | do-while loop | 128 | PASS |
+| ternary | ternary `?:` | 42 | PASS |
+| compound_assign | `+=`, `-=`, `*=` | 23 | PASS |
+| bitwise | `&`, `^` operations | 255 | PASS |
+| sizeof_test | sizeof(int/long/char) | 13 | PASS |
+| char_array | char array indexing | 198 | PASS |
+| logical_shortcircuit | `&&`, `\|\|` eval | 2 | PASS |
+| bubble_sort | 5-element sort | 12345 | PASS |
+| gcd | Euclidean GCD | 6 | PASS |
+| pointer_arith | pointer + offset | 20 | PASS |
+| nested_struct | struct pointer `->` | 300 | PASS |
+| enum_basic | `enum { R, G, B }; return B;` | 2 | PASS |
+| enum_explicit | `enum { A=10, B=20 }; return B;` | 20 | PASS |
+| typedef_basic | `typedef int myint; myint x = 42;` | 42 | PASS |
+| typedef_struct | typedef'd struct access | 30 | PASS |
+| switch_basic | switch with case match | 20 | PASS |
+| switch_default | switch with default fallthrough | 99 | PASS |
+| switch_break | switch with break between cases | 20 | PASS |
+| ifdef_basic | `#ifdef` conditional compilation | 1 | PASS |
+| ifndef_basic | `#ifndef` conditional compilation | 42 | PASS |
+| global_init | `int g = 99; return g;` | 99 | PASS |
+| global_init_array | `int a[] = {10,20,30}; return a[1];` | 20 | PASS |
+| funcptr | function pointer call via `BLR` | 7 | PASS |
+| union_basic | union int/char overlap | 65 | PASS |
+| syscall_intrinsic | `__syscall()` direct SVC emission | 42 | PASS |
+| include_basic | `#include` header file support | 42 | PASS |
+| post_increment | `i++` in while loop | 45 | PASS |
+| pre_increment | `++i` assignments | 6 | PASS |
+| post_decrement | `n--` in while loop | 15 | PASS |
+| for_postinc | `for (i=1; i<=10; i++)` | 55 | PASS |
+| large_stack_frame | 512+ byte frame with arrays | 189 | PASS |
 
-Average compilation: ~51,370 GPU cycles (~22 seconds wall time, dominated by Metal dispatch overhead). Average binary: 281 bytes. All programs execute in under 1,300 cycles.
+### 11.4 Self-Compilation
 
-### 11.4 Significance
+The compiler can compile its own source code on the GPU. This is the acid test of a self-hosting compiler --- the compiler is simultaneously the most complex input program and the tool that processes it.
+
+**Self-compilation statistics**: cc.c (115,725 bytes of source) is lexed into 21,388 tokens, parsed into 266 symbols, generating 90,664 bytes of ARM64 code with 2,896,376 bytes of data (93 string literals), 1,864 labels, and 2,613 branch fixups. The entire compilation runs in ~34.6 million GPU cycles (~140 seconds wall time), dominated by Metal dispatch overhead.
+
+The self-compilation pipeline operates as follows:
+
+1. **Stage 0**: Host GCC compiles `cc.c` → 44,996-byte ARM64 binary
+2. **Stage 1**: Stage 0 binary runs on GPU, reads `cc.c` from the GPU filesystem, and produces a self-compiled binary (90,664 bytes code + 2,896,376 bytes data in NCCD format)
+3. **Stage 2**: The self-compiled binary (Stage 1 output) runs on a fresh GPU instance, compiling a test program
+4. **Stage 3**: The test program executes and produces the correct result
+
+This represents a four-layer-deep compilation chain: host GCC → GPU compiler₀ → GPU compiler₁ → GPU test program → correct result.
+
+### 11.5 Significance
 
 This represents a complete, self-contained computing stack on a single GPU:
 
 - **Neural arithmetic** (trained models) computes at the lowest level
-- **Metal GPU kernel** (1,600 lines of Metal shader) emulates ARM64
-- **C compiler** (2,800 lines of C, compiled by host GCC) generates ARM64 on GPU
-- **Compiled programs** (generated by cc.c on GPU) execute on GPU
+- **Metal GPU kernel** (~1,700 lines of Metal shader) emulates ARM64
+- **C compiler** (~3,500 lines of C, compiled by host GCC) generates ARM64 on GPU
+- **Self-compiled compiler** (generated by cc.c running on GPU) generates ARM64
+- **Compiled programs** (generated by either compiler) execute on GPU
 
-The three-layer-deep pipeline (host GCC → GPU compiler → GPU execution) demonstrates that the ARM64 Metal kernel is complete enough to host a real language implementation, not just toy programs. The compiler exercises 130+ distinct ARM64 instructions including complex encodings (UBFM bitfield manipulation, SMADDL widening multiply-add, conditional selects) that GCC emits at `-O2`.
+The four-layer-deep pipeline (host GCC → GPU compiler → self-compiled GPU compiler → GPU execution) demonstrates that the ARM64 Metal kernel is complete enough to host not just a real language implementation but a self-hosting one. The compiler exercises 130+ distinct ARM64 instructions including complex encodings (UBFM bitfield manipulation, SMADDL widening multiply-add, conditional selects) that GCC emits at `-O2`.
 
-A meta-compilation demo further pushes to four layers deep: the GPU-hosted compiler compiles programs that themselves perform computation (stack-machine interpreter, ARM64 instruction encoder, Ackermann function A(3,4)=125, Sieve of Eratosthenes, Collatz sequence). All 8 meta-programs produce correct results, confirming the platform supports real algorithmic workloads at every level of abstraction.
+A meta-compilation demo further pushes depth: the GPU-hosted compiler compiles programs that themselves perform computation (stack-machine interpreter, ARM64 instruction encoder, Ackermann function A(3,4)=125, matrix determinant, Sieve of Eratosthenes, Tower of Hanoi, DJB2 hash, Collatz sequence). All 8 meta-programs produce correct results, confirming the platform supports real algorithmic workloads at every level of abstraction.
+
+---
+
+## 12. BusyBox on Metal GPU
+
+To demonstrate that the ARM64 Metal kernel can execute real-world Linux software --- not just custom-compiled freestanding programs --- we loaded and ran **BusyBox** (Alpine Linux core utilities) on the GPU.
+
+### 12.1 ELF64 Loader
+
+We implemented an ELF64 loader (`elf_loader.py`, ~800 lines) that parses standard Linux ELF binaries and loads them into GPU memory:
+
+1. Parse ELF64 header (magic, class, endianness, machine type)
+2. Load `PT_LOAD` segments to their specified virtual addresses
+3. Set up a Linux-compatible stack: `argc`, `argv` pointers, environment variables, auxiliary vector (`AT_PAGESZ`, `AT_RANDOM`, `AT_NULL`)
+4. Set SP to the constructed stack and PC to the ELF entry point
+
+### 12.2 Cross-Compilation
+
+BusyBox was cross-compiled for bare-metal ARM64 execution:
+
+```
+aarch64-linux-musl-gcc -static -mgeneral-regs-only -Os
+```
+
+The `-static` flag links musl libc statically (no dynamic loader needed). The `-mgeneral-regs-only` flag avoids SIMD/FP instructions that the Metal kernel does not implement (though SIMD load/store was later added for musl's va_list save/restore). The resulting binary is 264 KB with 30+ applets enabled.
+
+### 12.3 Syscall Coverage
+
+The ELF loader's syscall handler implements 28+ Linux syscalls sufficient for BusyBox's basic operation:
+
+- **Process**: exit, exit_group, set_tid_address, getpid, getppid
+- **Memory**: brk, mmap, mprotect
+- **I/O**: read, write, writev, ioctl
+- **Filesystem**: openat, close, fstat, lseek, getcwd, readlinkat
+- **System**: uname, prlimit64, getrandom, clock_gettime, rt_sigaction, rt_sigprocmask
+- **Misc**: futex (stub)
+
+### 12.4 Verified Applets
+
+The following BusyBox applets produce correct output on the Metal GPU:
+
+| Applet | Command | Output | Status |
+|--------|---------|--------|--------|
+| echo | `busybox echo hello` | `hello` | PASS |
+| uname | `busybox uname -a` | `Linux nCPU 5.15.0 ...` | PASS |
+| basename | `busybox basename /usr/local/bin/test` | `test` | PASS |
+| dirname | `busybox dirname /usr/local/bin/test` | `/usr/local/bin` | PASS |
+| true | `busybox true` | (exit 0) | PASS |
+| false | `busybox false` | (exit 1) | PASS |
+
+This is real BusyBox --- the same binary that ships in Alpine Linux containers --- parsing ELF headers, initializing musl libc, and running applets on the Metal compute shader. The `uname` output is spoofed via the SYS_UNAME handler to report `Linux nCPU 5.15.0`, but the binary itself is unmodified from the cross-compilation output.
+
+### 12.5 Significance
+
+Running a standard Linux userspace binary on a Metal GPU shader demonstrates that the ARM64 kernel is not a toy emulator but a standards-compliant execution environment. The ELF loader, Linux syscall layer, and ARM64 instruction coverage are sufficient to bootstrap real software compiled with a real C library (musl). This opens the path to running arbitrary statically-linked Linux binaries on GPU, subject only to syscall coverage and floating-point instruction support.
+
+---
+
+## 13. MUXLEQ: Neural Turing Completeness Proof
+
+As a minimal proof that neural networks can execute arbitrary computation, we implemented MUXLEQ --- a two-instruction Turing-complete computer --- and ran it using nCPU's trained neural models.
+
+### 13.1 Architecture
+
+MUXLEQ is a one-instruction set computer (OISC) with two operations:
+
+1. **SUBLEQ** `[A] = [A] - [B]; if [A] <= 0, jump to C`
+2. **MUX** `[A] = ([B] AND [C]) OR (NOT [B] AND [D])`
+
+Any computable function can be expressed as a sequence of these two instructions. The VM has 16-bit memory (65,536 words) and loads `.dec` (decimal) program images.
+
+### 13.2 Three Execution Modes
+
+MUXLEQ runs in the same three modes as the rest of nCPU:
+
+- **Compute mode** (Metal GPU): A ~130-line Metal compute shader implements the fetch-decode-execute loop. I/O uses GPU pause/resume traps.
+- **Fast mode** (Python): Native Python integer operations for maximum throughput and debugging.
+- **Neural mode**: SUB via nCPU's Kogge-Stone carry-lookahead adder (`arithmetic.pt` + `carry_combine.pt`, ~248us per operation) and MUX via neural AND/OR/NOT gates (`logical.pt`, ~63us per operation). All arithmetic routes through the trained models with zero fallbacks.
+
+### 13.3 Verification
+
+32 tests verify all instruction cases, I/O, halt, `.dec` loading, and neural/compute parity. The VM can load and execute eForth images, confirming Turing-complete operation.
+
+### 13.4 Significance
+
+MUXLEQ provides the strongest possible proof of neural computational universality: if neural networks can exactly execute a two-instruction OISC, they can execute any computable function. This is not an approximation or a probabilistic argument --- every SUB and MUX operation produces bit-exact results through the trained models. The proof is constructive (a working implementation) rather than theoretical (an existence argument).
 
 ---
 

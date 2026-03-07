@@ -365,6 +365,41 @@ class GPUFilesystem:
         self.directories.discard(path)
         return 0
 
+    def rename(self, old_path: str, new_path: str) -> int:
+        """Rename/move a file or directory. Returns 0 or -1."""
+        old_path = self.resolve_path(old_path)
+        new_path = self.resolve_path(new_path)
+
+        # Ensure new parent exists
+        new_parent = self._parent_dir(new_path)
+        if new_parent != "/" and new_parent not in self.directories:
+            return -1  # ENOENT
+
+        if old_path in self.files:
+            self.files[new_path] = self.files.pop(old_path)
+            # Update any open fd entries
+            for entry in self.fd_table.values():
+                if entry.get("path") == old_path:
+                    entry["path"] = new_path
+            return 0
+        elif old_path in self.directories:
+            # Rename directory and all children
+            self.directories.discard(old_path)
+            self.directories.add(new_path)
+            prefix = old_path + "/"
+            # Move child files
+            to_move = [(k, v) for k, v in self.files.items() if k.startswith(prefix)]
+            for k, v in to_move:
+                new_k = new_path + k[len(old_path):]
+                self.files[new_k] = self.files.pop(k)
+            # Move child directories
+            to_move_dirs = [d for d in self.directories if d.startswith(prefix)]
+            for d in to_move_dirs:
+                self.directories.discard(d)
+                self.directories.add(new_path + d[len(old_path):])
+            return 0
+        return -1  # ENOENT
+
     def getcwd(self) -> str:
         return self.cwd
 

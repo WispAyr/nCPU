@@ -378,10 +378,9 @@ def make_syscall_handler(
             buf_addr = x1
             info = filesystem.fstat(fd)
             if info:
-                # Write a minimal stat struct: [size(8B), type(1B)]
-                size_bytes = struct.pack("<q", info["size"])
-                type_byte = b'\x01' if info["type"] == "dir" else b'\x00'
-                cpu.write_memory(buf_addr, size_bytes + type_byte)
+                from ncpu.os.gpu.elf_loader import _pack_stat64
+                stat_buf = _pack_stat64(info)
+                cpu.write_memory(buf_addr, stat_buf)
                 cpu.set_register(0, 0)
             else:
                 cpu.set_register(0, -1)
@@ -422,19 +421,20 @@ def make_syscall_handler(
             return True
 
         elif syscall_num == SYS_GETDENTS64 and filesystem:
-            # x0=fd (ignored, use path from open or use cwd), x1=buf, x2=bufsize
-            # We use a simplified approach: x0 is treated as a dir path pointer
-            # Actually, for simplicity, the C code opens "." and we handle it here
-            # We pack entries as: [name_len(2B), type(1B), name(NB), \0]
+            # x0=fd, x1=buf, x2=bufsize
+            # Real linux_dirent64: d_ino(8) d_off(8) d_reclen(2) d_type(1) d_name[]
+            fd_num = x0
             buf_addr = x1
             buf_size = x2
 
-            # The fd for getdents is a directory fd. We need to figure out what
-            # directory it points to. For simplicity, use cwd.
-            # Better approach: track directory fd opens
             dirpath = None
-            if x0 in filesystem.fd_table:
-                dirpath = filesystem.fd_table[x0].get("path")
+            if fd_num in filesystem.fd_table:
+                entry = filesystem.fd_table[fd_num]
+                dirpath = entry.get("path")
+                # Check if already consumed (second call returns 0)
+                if entry.get("getdents_consumed"):
+                    cpu.set_register(0, 0)
+                    return True
             if not dirpath:
                 dirpath = filesystem.getcwd()
 
@@ -443,23 +443,40 @@ def make_syscall_handler(
                 cpu.set_register(0, -1)
                 return True
 
-            # Pack entries as length-prefixed strings
+            # Pack as real linux_dirent64 structs
+            DT_DIR = 4
+            DT_REG = 8
             buf = b""
-            for name in entries:
+            for idx, name in enumerate(entries):
                 name_bytes = name.encode('ascii') + b'\x00'
-                entry_len = 2 + 1 + len(name_bytes)  # len(2B) + type(1B) + name
-                # Check if file or dir
+                # Header: d_ino(8) + d_off(8) + d_reclen(2) + d_type(1) = 19 bytes
+                raw_len = 19 + len(name_bytes)
+                # Pad to 8-byte alignment
+                d_reclen = (raw_len + 7) & ~7
+
+                if len(buf) + d_reclen > buf_size:
+                    break
+
                 full_path = filesystem.resolve_path(
                     (dirpath + "/" if dirpath != "/" else "/") + name
                 )
                 is_dir = full_path in filesystem.directories
-                entry = struct.pack("<HB", entry_len, 1 if is_dir else 0) + name_bytes
-                if len(buf) + len(entry) > buf_size:
-                    break
-                buf += entry
+                d_ino = hash(full_path) & 0xFFFFFFFFFFFFFFFF
+                d_off = idx + 1
+                d_type = DT_DIR if is_dir else DT_REG
+
+                dirent = struct.pack('<QQHB', d_ino, d_off, d_reclen, d_type)
+                dirent += name_bytes
+                # Pad to d_reclen
+                dirent += b'\x00' * (d_reclen - len(dirent))
+                buf += dirent
 
             cpu.write_memory(buf_addr, buf)
             cpu.set_register(0, len(buf))
+
+            # Mark as consumed so next call returns 0
+            if fd_num in filesystem.fd_table:
+                filesystem.fd_table[fd_num]["getdents_consumed"] = True
             return True
 
         # ═══════════════════════════════════════════════════════════════

@@ -546,6 +546,111 @@ int main(void) {
 """,
         "expected": 65,
     },
+
+    "syscall_intrinsic": {
+        "source": """\
+long __syscall(long nr, long a0, long a1, long a2, long a3, long a4);
+
+int main(void) {
+    /* SYS_GETPID = 172, returns pid (always 1 in single-process) */
+    long pid = __syscall(172, 0, 0, 0, 0, 0);
+    if (pid > 0) return 42;
+    return 0;
+}
+""",
+        "expected": 42,
+    },
+
+    "include_basic": {
+        "source": """\
+#include "mymath.h"
+
+int main(void) {
+    return add(3, 4);
+}
+""",
+        "expected": 7,
+        "files": {
+            "/usr/include/mymath.h": """\
+int add(int a, int b) {
+    return a + b;
+}
+""",
+        },
+    },
+
+    "post_increment": {
+        "source": """\
+int main(void) {
+    int sum = 0;
+    int i = 0;
+    while (i < 10) {
+        sum = sum + i;
+        i++;
+    }
+    return sum;
+}
+""",
+        "expected": 45,
+    },
+
+    "pre_increment": {
+        "source": """\
+int main(void) {
+    int i = 0;
+    int a = ++i;
+    int b = ++i;
+    int c = ++i;
+    return a + b + c;
+}
+""",
+        "expected": 6,  # 1 + 2 + 3 = 6
+    },
+
+    "post_decrement": {
+        "source": """\
+int main(void) {
+    int n = 5;
+    int sum = 0;
+    while (n > 0) {
+        sum = sum + n;
+        n--;
+    }
+    return sum;
+}
+""",
+        "expected": 15,  # 5+4+3+2+1 = 15
+    },
+
+    "for_postinc": {
+        "source": """\
+int main(void) {
+    int sum = 0;
+    int i;
+    for (i = 1; i <= 10; i++) {
+        sum = sum + i;
+    }
+    return sum;
+}
+""",
+        "expected": 55,
+    },
+
+    "large_stack_frame": {
+        "source": """\
+int main(void) {
+    int a[64];
+    int b[64];
+    int i;
+    for (i = 0; i < 64; i++) {
+        a[i] = i;
+        b[i] = i * 2;
+    }
+    return a[63] + b[63];
+}
+""",
+        "expected": 189,
+    },
 }
 
 
@@ -604,6 +709,17 @@ def main():
         # Write args file: line 1 = source path, line 2 = output path
         args_content = f"{src_path}\n{out_path}\n"
         fs.write_file("/tmp/.cc_args", args_content.encode())
+
+        # Write additional files (for #include tests)
+        if "files" in info:
+            for fpath, fcontent in info["files"].items():
+                # Create parent directories
+                parts = fpath.strip("/").split("/")
+                for depth in range(1, len(parts)):
+                    d = "/" + "/".join(parts[:depth])
+                    if not fs.exists(d):
+                        fs.mkdir(d)
+                fs.write_file(fpath, fcontent.encode())
 
         # --- PHASE A: Run the compiler on the GPU ---
         print(f"\n  [A] Compiling {name}.c on GPU...")

@@ -11,7 +11,7 @@
  *   - Control flow: if/else, while, for, do-while, break, continue
  *   - Expressions: full precedence, unary, binary, ternary, sizeof
  *   - String/char literals, global/local variables
- *   - #define (constant macros), #include (built-in headers)
+ *   - #define (constant macros), #include "file" / #include <file>
  *   - Casts, struct (basic)
  *
  * Compile (on host):
@@ -24,16 +24,20 @@
  *   run /bin/hello            -> executes the compiled program
  */
 
+#ifdef __CCGPU__
+#include "arm64_selfhost.h"
+#else
 #include "arm64_libc.h"
+#endif
 
 /* ======================================================================== */
 /* CONFIGURATION                                                            */
 /* ======================================================================== */
 
-#define MAX_TOKENS     8192
-#define MAX_SOURCE     32768
-#define MAX_OUTPUT     65536
-#define MAX_SYMBOLS    512
+#define MAX_TOKENS     32768
+#define MAX_SOURCE     262144
+#define MAX_OUTPUT     131072
+#define MAX_SYMBOLS    1024
 #define MAX_STRINGS    256
 #define MAX_LOCALS     128
 #define MAX_BREAKS     64
@@ -41,11 +45,12 @@
 #define MAX_STRUCT_FIELDS 32
 #define MAX_STRUCTS    32
 #define MAX_DEFINES    128
+#define MAX_INCLUDE_BUF 65536
 
 /* ARM64 code generation target addresses */
 #define CODE_BASE      0x10000
 #define DATA_BASE      0x50000
-#define STACK_TOP      0xFF000
+#define STACK_TOP      0xF00000
 
 /* ======================================================================== */
 /* TOKEN TYPES                                                              */
@@ -95,7 +100,10 @@ struct Type {
 static struct Type types[MAX_TYPES];
 static int n_types;
 
-static int ty_void, ty_char, ty_int, ty_long;
+static int ty_void;
+static int ty_char;
+static int ty_int;
+static int ty_long;
 
 static int type_new(int kind, int size) {
     int id = n_types++;
@@ -158,9 +166,9 @@ struct Token {
     long type;             /* token type (widened to avoid padding) */
     long val;              /* numeric value */
     long line;             /* source line number */
-    char name[40];         /* identifier name or string content */
+    char name[128];        /* identifier name or string content */
 };
-/* sizeof = 8+8+8+40 = 64 (power of 2, no padding) */
+/* sizeof = 8+8+8+128 = 152 */
 
 static struct Token tokens[MAX_TOKENS];
 static int n_tokens;
@@ -245,12 +253,12 @@ struct Fixup {
     int type;              /* 0=B, 1=B.cond, 2=BL */
 };
 
-#define MAX_FIXUPS 2048
+#define MAX_FIXUPS 8192
 static struct Fixup fixups[MAX_FIXUPS];
 static int n_fixups;
 
 /* Label positions (code offset for each label) */
-#define MAX_LABELS 2048
+#define MAX_LABELS 8192
 static int label_pos[MAX_LABELS];
 
 /* Source buffer */
@@ -270,6 +278,13 @@ static void error(const char *msg) {
     had_error = 1;
     error_line = (tok_pos < n_tokens) ? tokens[tok_pos].line : 0;
     printf("error: line %d: %s\n", error_line, msg);
+    /* Debug: print current and previous token type numbers */
+    if (tok_pos < n_tokens) {
+        printf("  cur_tok type=%ld pos=%d\n", tokens[tok_pos].type, tok_pos);
+    }
+    if (tok_pos > 0) {
+        printf("  prev_tok type=%ld pos=%d\n", tokens[tok_pos - 1].type, tok_pos - 1);
+    }
 }
 
 static void error_at(int line, const char *msg) {
@@ -449,7 +464,7 @@ static void lex(void) {
                 /* macro name */
                 int ns = 0;
                 char dname[64];
-                while (i < src_len && is_alnum(source[i]) && ns < 39) {
+                while (i < src_len && is_alnum(source[i]) && ns < 63) {
                     dname[ns++] = source[i++];
                 }
                 dname[ns] = '\0';
@@ -474,7 +489,65 @@ static void lex(void) {
                 continue;
             }
 
-            /* #include — skip (we use arm64_libc.h built into the compiler) */
+            /* #include "file" or #include <file> */
+            if (i + 7 <= src_len && !strncmp(source + i, "include", 7) && !is_alnum(source[i+7])) {
+                i += 7;
+                while (i < src_len && source[i] == ' ') i++;
+
+                char inc_name[128];
+                int fn = 0;
+                char delim = 0;
+                if (i < src_len && source[i] == '"') { delim = '"'; i++; }
+                else if (i < src_len && source[i] == '<') { delim = '>'; i++; }
+
+                if (delim) {
+                    while (i < src_len && source[i] != delim && fn < 127)
+                        inc_name[fn++] = source[i++];
+                    inc_name[fn] = '\0';
+                    if (i < src_len && source[i] == delim) i++;
+                }
+                while (i < src_len && source[i] != '\n') i++;
+                if (i < src_len) i++; /* skip newline */
+
+                if (!ifdef_active || fn == 0) continue;
+
+                /* Try to open the included file */
+                char inc_path[256];
+                int inc_fd = -1;
+
+                /* Try: /usr/include/filename */
+                strcpy(inc_path, "/usr/include/");
+                strcat(inc_path, inc_name);
+                inc_fd = open(inc_path, O_RDONLY);
+
+                if (inc_fd < 0) {
+                    /* Try: filename as-is (absolute path) */
+                    strcpy(inc_path, inc_name);
+                    inc_fd = open(inc_path, O_RDONLY);
+                }
+
+                if (inc_fd >= 0) {
+                    /* Read included file into temp buffer */
+                    char inc_buf[MAX_INCLUDE_BUF];
+                    int inc_len = (int)read(inc_fd, inc_buf, MAX_INCLUDE_BUF - 1);
+                    close(inc_fd);
+
+                    if (inc_len > 0 && (src_len + inc_len) < MAX_SOURCE) {
+                        /* Shift remaining source right to make room */
+                        for (int j = src_len - 1; j >= i; j--)
+                            source[j + inc_len] = source[j];
+                        /* Copy included content into the gap */
+                        for (int j = 0; j < inc_len; j++)
+                            source[i + j] = inc_buf[j];
+                        src_len += inc_len;
+                        source[src_len] = '\0';
+                        /* Don't advance i — continue lexing from included content */
+                    }
+                }
+                continue;
+            }
+
+            /* Unknown preprocessor directive — skip */
             while (i < src_len && source[i] != '\n') i++;
             continue;
         }
@@ -486,7 +559,7 @@ static void lex(void) {
             continue;
         }
 
-        struct Token *t = &tokens[n_tokens];
+        struct Token *t = tokens + n_tokens;
         t->line = line;
         t->val = 0;
         t->name[0] = '\0';
@@ -549,7 +622,7 @@ static void lex(void) {
         if (c == '"') {
             i++;
             int ns = 0;
-            while (i < src_len && source[i] != '"' && ns < 39) {
+            while (i < src_len && source[i] != '"' && ns < 127) {
                 if (source[i] == '\\') {
                     i++;
                     switch (source[i]) {
@@ -577,7 +650,7 @@ static void lex(void) {
         /* Identifier or keyword */
         if (is_alpha(c)) {
             int ns = 0;
-            while (i < src_len && is_alnum(source[i]) && ns < 39) {
+            while (i < src_len && is_alnum(source[i]) && ns < 63) {
                 t->name[ns++] = source[i++];
             }
             t->name[ns] = '\0';
@@ -716,12 +789,16 @@ static void lex(void) {
 /* ======================================================================== */
 
 static struct Token *peek(void) {
-    return &tokens[tok_pos];
+    return tokens + tok_pos;
 }
 
 static struct Token *advance(void) {
-    if (tok_pos < n_tokens) return &tokens[tok_pos++];
-    return &tokens[n_tokens]; /* EOF */
+    if (tok_pos < n_tokens) {
+        struct Token *p = tokens + tok_pos;
+        tok_pos++;
+        return p;
+    }
+    return tokens + n_tokens; /* EOF */
 }
 
 static int check(int type) {
@@ -750,14 +827,15 @@ static void expect(int type) {
 static struct Symbol *find_symbol(const char *name) {
     /* Search from most recent (innermost scope) */
     for (int i = n_symbols - 1; i >= 0; i--) {
-        if (!strcmp(symbols[i].name, name)) return &symbols[i];
+        if (!strcmp(symbols[i].name, name)) return symbols + i;
     }
     return NULL;
 }
 
 static struct Symbol *add_symbol(const char *name, int type, int kind) {
     if (n_symbols >= MAX_SYMBOLS) { error("too many symbols"); return NULL; }
-    struct Symbol *s = &symbols[n_symbols++];
+    struct Symbol *s = symbols + n_symbols;
+    n_symbols++;
     strncpy(s->name, name, 63);
     s->name[63] = '\0';
     s->type = type;
@@ -1027,6 +1105,8 @@ static int emit_b(int label) {
         fixups[n_fixups].label = label;
         fixups[n_fixups].type = 0;
         n_fixups++;
+    } else {
+        error("fixup table overflow (B)");
     }
     return pos;
 }
@@ -1040,6 +1120,8 @@ static int emit_bcond(int cond, int label) {
         fixups[n_fixups].label = label;
         fixups[n_fixups].type = 1;
         n_fixups++;
+    } else {
+        error("fixup table overflow (B.cond)");
     }
     return pos;
 }
@@ -1053,6 +1135,8 @@ static int emit_bl(int label) {
         fixups[n_fixups].label = label;
         fixups[n_fixups].type = 2;
         n_fixups++;
+    } else {
+        error("fixup table overflow (BL)");
     }
     return pos;
 }
@@ -1070,7 +1154,11 @@ static void emit_br(int rn) {
 /* Allocate a new label */
 static int new_label(void) {
     int l = label_counter++;
-    if (l < MAX_LABELS) label_pos[l] = -1;
+    if (l >= MAX_LABELS) {
+        error("label table overflow");
+        return 0;
+    }
+    label_pos[l] = -1;
     return l;
 }
 
@@ -1082,7 +1170,7 @@ static void mark_label(int label) {
 /* Resolve all fixups */
 static void resolve_fixups(void) {
     for (int i = 0; i < n_fixups; i++) {
-        struct Fixup *f = &fixups[i];
+        struct Fixup *f = fixups + i;
         if (f->label >= MAX_LABELS || label_pos[f->label] < 0) {
             error("unresolved label");
             continue;
@@ -1177,22 +1265,24 @@ static void emit_prologue(int local_size) {
     local_size = (local_size + 15) & ~15;
     func_stack_size = local_size + 16;  /* +16 for FP/LR */
 
-    /* STP x29, x30, [SP, #-frame]! */
-    emit_stp_pre(FP, LR, SP, -func_stack_size);
+    /* SUB SP, SP, #frame (placeholder — will be fixed up with actual size) */
+    emit_sub_imm(SP, SP, func_stack_size);
+    /* STP x29, x30, [SP, #0] (signed-offset, zero displacement) */
+    emit(0xA9000000 | (LR << 10) | (SP << 5) | FP);
     /* MOV x29, SP */
     emit_mov(FP, SP);
 
-    stack_offset = 16;  /* first local at [FP, #16] relative from bottom... */
-    /* Actually: locals start at [SP, #16] = [FP, #-(frame-16)] */
-    /* Simpler: locals at FP - offset, params in x0-x7 */
+    stack_offset = 16;
 }
 
 static void emit_epilogue(void) {
     mark_label(func_ret_label);
     /* MOV SP, x29 */
     emit_mov(SP, FP);
-    /* LDP x29, x30, [SP], #frame */
-    emit_ldp_post(FP, LR, SP, func_stack_size);
+    /* LDP x29, x30, [SP, #0] (signed-offset, zero displacement) */
+    emit(0xA9400000 | (LR << 10) | (SP << 5) | FP);
+    /* ADD SP, SP, #frame (placeholder — will be fixed up with actual size) */
+    emit_add_imm(SP, SP, func_stack_size);
     emit_ret();
 }
 
@@ -1296,6 +1386,7 @@ static int parse_assign(void);
 static void parse_stmt(void);
 static void parse_block(void);
 static int parse_type(void);
+static int parse_unary(void);
 
 /* Check if current token starts a type specifier */
 static int is_type_start(void) {
@@ -1312,6 +1403,11 @@ static int is_type_start(void) {
 
 /* Expression result: register number and type */
 static int expr_type;  /* type of last expression result */
+
+/* Lvalue tracking for post/pre increment/decrement store-back */
+static int last_lval_kind;   /* -1 = none, SYM_LOCAL/SYM_PARAM/SYM_GLOBAL */
+static int last_lval_offset; /* stack offset (local/param) or data offset (global) */
+static int last_lval_type;   /* variable type */
 
 /* ======================================================================== */
 /* TYPE PARSER                                                              */
@@ -1419,11 +1515,12 @@ static int parse_type(void) {
                     if (arr_len > 0) ft = type_array(ft, arr_len);
                 }
                 if (structs[sid].n_fields < MAX_STRUCT_FIELDS) {
-                    struct StructField *f = &structs[sid].fields[structs[sid].n_fields++];
-                    strncpy(f->name, fname, 31);
-                    f->name[31] = '\0';
-                    f->type = ft;
-                    f->offset = 0; /* all fields at offset 0 */
+                    int fi = structs[sid].n_fields;
+                    structs[sid].n_fields++;
+                    strncpy(structs[sid].fields[fi].name, fname, 31);
+                    structs[sid].fields[fi].name[31] = '\0';
+                    structs[sid].fields[fi].type = ft;
+                    structs[sid].fields[fi].offset = 0; /* all fields at offset 0 */
                     if (type_size(ft) > max_size) max_size = type_size(ft);
                 }
                 expect(T_SEMICOLON);
@@ -1488,11 +1585,12 @@ static int parse_type(void) {
                     if (align > 8) align = 8;
                     if (align > 0) off = (off + align - 1) & ~(align - 1);
 
-                    struct StructField *f = &structs[sid].fields[structs[sid].n_fields++];
-                    strncpy(f->name, fname, 31);
-                    f->name[31] = '\0';
-                    f->type = ft;
-                    f->offset = off;
+                    int fi = structs[sid].n_fields;
+                    structs[sid].n_fields++;
+                    strncpy(structs[sid].fields[fi].name, fname, 31);
+                    structs[sid].fields[fi].name[31] = '\0';
+                    structs[sid].fields[fi].type = ft;
+                    structs[sid].fields[fi].offset = off;
                     off += type_size(ft);
                 }
                 expect(T_SEMICOLON);
@@ -1548,6 +1646,7 @@ static int parse_type(void) {
 /* Parse primary expression, return register holding result */
 static int parse_primary(void) {
     if (had_error) return 0;
+    last_lval_kind = -1;  /* Reset lvalue tracking */
 
     /* Number literal */
     if (check(T_NUM)) {
@@ -1625,7 +1724,7 @@ static int parse_primary(void) {
             int t = parse_type();
             while (match(T_STAR)) t = type_ptr(t);
             expect(T_RPAREN);
-            int r = parse_primary();  /* parse the cast operand as unary */
+            int r = parse_unary();  /* cast operand: unary (includes postfix) */
             expr_type = t;
             return r;
         }
@@ -1655,6 +1754,23 @@ static int parse_primary(void) {
                 }
             }
             expect(T_RPAREN);
+
+            /* __syscall(nr, a0, a1, a2, a3, a4) intrinsic */
+            if (strcmp(name, "__syscall") == 0) {
+                /* Move syscall number (arg0) to X8 */
+                if (n_args > 0) emit_mov(8, args[0]);
+                /* Move remaining args: arg1→X0, arg2→X1, etc. */
+                for (int j = 1; j < n_args; j++) {
+                    if (args[j] != j - 1) emit_mov(j - 1, args[j]);
+                }
+                for (int j = 0; j < n_args; j++) free_reg(args[j]);
+                emit_svc();
+                /* Result in X0 */
+                int r = alloc_reg();
+                if (r != 0) emit_mov(r, 0);
+                expr_type = ty_long;
+                return r;
+            }
 
             /* Save caller-saved registers (x9-x18) that are in use */
             int n_save = 0;
@@ -1770,6 +1886,8 @@ static int parse_primary(void) {
                 fixups[n_fixups].label = fn_lbl;
                 fixups[n_fixups].type = 3; /* absolute address */
                 n_fixups++;
+            } else {
+                error("fixup table overflow (funcptr)");
             }
             expr_type = type_ptr(ty_void); /* function pointer type */
             return r;
@@ -1801,6 +1919,9 @@ static int parse_primary(void) {
             } else {
                 emit_load_local(r, sym->offset, sym->type);
                 expr_type = sym->type;
+                last_lval_kind = sym->kind;
+                last_lval_offset = sym->offset;
+                last_lval_type = sym->type;
             }
         } else if (sym->kind == SYM_GLOBAL) {
             if (types[sym->type].kind == TY_ARRAY) {
@@ -1816,6 +1937,9 @@ static int parse_primary(void) {
                 emit_load_indirect(r, tmp, sym->type);
                 free_reg(tmp);
                 expr_type = sym->type;
+                last_lval_kind = sym->kind;
+                last_lval_offset = sym->offset;
+                last_lval_type = sym->type;
             }
         }
         return r;
@@ -1855,12 +1979,17 @@ static int parse_postfix(void) {
             emit_add(r, r, idx);
             free_reg(idx);
 
-            /* Load value */
-            int rd = alloc_reg();
-            emit_load_indirect(rd, r, elem_type);
-            free_reg(r);
-            r = rd;
-            expr_type = elem_type;
+            if (types[elem_type].kind == TY_STRUCT) {
+                /* For struct elements, keep address for . or -> access */
+                expr_type = elem_type;
+            } else {
+                /* Load scalar value */
+                int rd = alloc_reg();
+                emit_load_indirect(rd, r, elem_type);
+                free_reg(r);
+                r = rd;
+                expr_type = elem_type;
+            }
             continue;
         }
 
@@ -1937,7 +2066,16 @@ static int parse_postfix(void) {
             int rd = alloc_reg();
             emit_mov(rd, r);
             emit_add_imm(r, r, 1);
-            /* TODO: store back — requires knowing the lvalue */
+            /* Store incremented value back to variable */
+            if (last_lval_kind == SYM_LOCAL || last_lval_kind == SYM_PARAM) {
+                emit_store_local(r, last_lval_offset, last_lval_type);
+            } else if (last_lval_kind == SYM_GLOBAL) {
+                int ta = alloc_reg();
+                emit_load_global_addr(ta, last_lval_offset);
+                emit_store_indirect(r, ta, last_lval_type);
+                free_reg(ta);
+            }
+            last_lval_kind = -1;
             free_reg(r);
             r = rd;
             continue;
@@ -1948,6 +2086,16 @@ static int parse_postfix(void) {
             int rd = alloc_reg();
             emit_mov(rd, r);
             emit_sub_imm(r, r, 1);
+            /* Store decremented value back to variable */
+            if (last_lval_kind == SYM_LOCAL || last_lval_kind == SYM_PARAM) {
+                emit_store_local(r, last_lval_offset, last_lval_type);
+            } else if (last_lval_kind == SYM_GLOBAL) {
+                int ta = alloc_reg();
+                emit_load_global_addr(ta, last_lval_offset);
+                emit_store_indirect(r, ta, last_lval_type);
+                free_reg(ta);
+            }
+            last_lval_kind = -1;
             free_reg(r);
             r = rd;
             continue;
@@ -2016,16 +2164,35 @@ static int parse_unary(void) {
         return rd;
     }
     if (match(T_INC)) {
-        /* Pre-increment */
-        /* TODO: proper lvalue handling */
+        /* Pre-increment: ++var — increment then return new value */
         int r = parse_unary();
         emit_add_imm(r, r, 1);
+        /* Store back to variable */
+        if (last_lval_kind == SYM_LOCAL || last_lval_kind == SYM_PARAM) {
+            emit_store_local(r, last_lval_offset, last_lval_type);
+        } else if (last_lval_kind == SYM_GLOBAL) {
+            int ta = alloc_reg();
+            emit_load_global_addr(ta, last_lval_offset);
+            emit_store_indirect(r, ta, last_lval_type);
+            free_reg(ta);
+        }
+        last_lval_kind = -1;
         return r;
     }
     if (match(T_DEC)) {
-        /* Pre-decrement */
+        /* Pre-decrement: --var — decrement then return new value */
         int r = parse_unary();
         emit_sub_imm(r, r, 1);
+        /* Store back to variable */
+        if (last_lval_kind == SYM_LOCAL || last_lval_kind == SYM_PARAM) {
+            emit_store_local(r, last_lval_offset, last_lval_type);
+        } else if (last_lval_kind == SYM_GLOBAL) {
+            int ta = alloc_reg();
+            emit_load_global_addr(ta, last_lval_offset);
+            emit_store_indirect(r, ta, last_lval_type);
+            free_reg(ta);
+        }
+        last_lval_kind = -1;
         return r;
     }
 
@@ -2852,6 +3019,7 @@ static void parse_global_decl(void) {
 
         if (fn && fn->kind == SYM_FUNC) {
             lbl = fn->offset;
+            fn->type = rt;  /* Update return type (may have been implicit ty_int) */
         } else {
             lbl = new_label();
             fn = add_symbol(name, rt, SYM_FUNC);
@@ -2863,7 +3031,7 @@ static void parse_global_decl(void) {
         enter_scope();
         int n_params = 0;
         int param_types[8];
-        char param_names[8][64];
+        char param_names[512]; /* 8 * 64, use param_names + i*64 */
 
         if (!check(T_RPAREN)) {
             /* Check for void parameter */
@@ -2879,10 +3047,10 @@ static void parse_global_decl(void) {
                     param_types[n_params] = pt;
 
                     if (check(T_IDENT)) {
-                        strcpy(param_names[n_params], peek()->name);
+                        strcpy(param_names + n_params * 64, peek()->name);
                         advance();
                     } else {
-                        param_names[n_params][0] = '\0';
+                        *(param_names + n_params * 64) = '\0';
                     }
 
                     /* Array parameter decay: int arr[] → int *arr */
@@ -2920,9 +3088,9 @@ static void parse_global_decl(void) {
 
         /* Add parameters as locals */
         for (int i = 0; i < n_params; i++) {
-            if (param_names[i][0]) {
+            if (*(param_names + i * 64)) {
                 int off = alloc_local(8);
-                struct Symbol *ps = add_symbol(param_names[i], param_types[i], SYM_PARAM);
+                struct Symbol *ps = add_symbol(param_names + i * 64, param_types[i], SYM_PARAM);
                 if (ps) ps->offset = off;
                 /* Store parameter register to stack */
                 emit_store_local(i, off, param_types[i]);
@@ -2946,24 +3114,22 @@ static void parse_global_decl(void) {
         int actual_stack = (stack_offset + 15) & ~15;
         func_stack_size = actual_stack;
 
-        /* Rewrite prologue STP instruction */
-        int neg_frame = (-func_stack_size) & 0x7F;
-        unsigned int stp_inst = 0xA9800000 | (neg_frame << 15) | (LR << 10) | (SP << 5) | FP;
-        output[prologue_pos]     = stp_inst & 0xFF;
-        output[prologue_pos + 1] = (stp_inst >> 8) & 0xFF;
-        output[prologue_pos + 2] = (stp_inst >> 16) & 0xFF;
-        output[prologue_pos + 3] = (stp_inst >> 24) & 0xFF;
+        /* Rewrite prologue SUB SP, SP, #frame instruction */
+        unsigned int sub_inst = 0xD1000000 | ((func_stack_size & 0xFFF) << 10) | (SP << 5) | SP;
+        output[prologue_pos]     = sub_inst & 0xFF;
+        output[prologue_pos + 1] = (sub_inst >> 8) & 0xFF;
+        output[prologue_pos + 2] = (sub_inst >> 16) & 0xFF;
+        output[prologue_pos + 3] = (sub_inst >> 24) & 0xFF;
 
-        /* Also fix LDP in epilogue — find it (it's at the ret label position + instructions) */
+        /* Also fix ADD SP, SP, #frame in epilogue */
         int ep_pos = label_pos[func_ret_label];
         if (ep_pos >= 0) {
-            /* MOV SP, FP at ep_pos, then LDP at ep_pos+4 */
-            unsigned int ldp_inst = 0xA8C00000 | ((func_stack_size / 8 & 0x7F) << 15) |
-                                    (LR << 10) | (SP << 5) | FP;
-            output[ep_pos + 4] = ldp_inst & 0xFF;
-            output[ep_pos + 5] = (ldp_inst >> 8) & 0xFF;
-            output[ep_pos + 6] = (ldp_inst >> 16) & 0xFF;
-            output[ep_pos + 7] = (ldp_inst >> 24) & 0xFF;
+            /* MOV SP, FP at ep_pos, LDP at ep_pos+4, ADD SP at ep_pos+8 */
+            unsigned int add_inst = 0x91000000 | ((func_stack_size & 0xFFF) << 10) | (SP << 5) | SP;
+            output[ep_pos + 8] = add_inst & 0xFF;
+            output[ep_pos + 9] = (add_inst >> 8) & 0xFF;
+            output[ep_pos + 10] = (add_inst >> 16) & 0xFF;
+            output[ep_pos + 11] = (add_inst >> 24) & 0xFF;
         }
 
         leave_scope();
@@ -3130,6 +3296,10 @@ static void compile(void) {
     n_strings = 0;
     n_structs = 0;
     n_defines = 0;
+    /* Pre-define __CCGPU__ so compiled programs can detect this compiler */
+    strcpy(defines[n_defines].name, "__CCGPU__");
+    strcpy(defines[n_defines].value, "1");
+    n_defines++;
     scope_depth = 0;
     code_pos = 0;
     data_pos = 0;
@@ -3137,6 +3307,7 @@ static void compile(void) {
     n_fixups = 0;
     had_error = 0;
     break_depth = 0;
+    last_lval_kind = -1;
     cont_depth = 0;
     ifdef_depth = 0;
     ifdef_active = 1;
@@ -3314,13 +3485,18 @@ int main(void) {
         hdr[7] = (data_pos >> 24) & 0xFF;
         write(out_fd, hdr, 8);
 
-        /* Write data section */
-        unsigned char data_buf[4096];
-        memset(data_buf, 0, sizeof(data_buf));
-        emit_data_section(data_buf, sizeof(data_buf));
-        int data_write = (data_pos + 7) & ~7;
-        if (data_write > (int)sizeof(data_buf)) data_write = (int)sizeof(data_buf);
-        write(out_fd, data_buf, data_write);
+        /* Build data section in unused high memory (0x800000 = 8MB mark,
+         * well above BSS and below stack at 0xF00000), then write all
+         * at once. This avoids hundreds of small write SVCs — each SVC
+         * round-trips 16MB through Metal, so one big write is much faster
+         * than hundreds of 4KB writes. */
+        {
+            unsigned char *dsec = (unsigned char *)0x800000;
+            int dsz = (data_pos + 7) & ~7;
+            memset(dsec, 0, dsz);
+            emit_data_section(dsec, dsz);
+            write(out_fd, dsec, dsz);
+        }
     }
 
     close(out_fd);

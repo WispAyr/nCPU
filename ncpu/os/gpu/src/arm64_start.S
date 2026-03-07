@@ -8,8 +8,9 @@
 .section .text
 
 _start:
-    /* Set stack pointer to top of stack area (16 MB layout) */
-    mov x0, #0xFF000
+    /* Set stack pointer high in 16 MB GPU memory */
+    /* 0xF00000 = 15 MB mark, leaving ~12 MB for data/BSS below */
+    movz x0, #0xF0, lsl #16
     mov sp, x0
 
     /* Call main() */

@@ -109,25 +109,28 @@ Self-compilation verified: nsl source -> neural compiler -> neural assembler -> 
 
 ### Self-Hosting C Compiler on Metal GPU
 
-A ~2,800-line C compiler (`cc.c`) that compiles C source into ARM64 machine code **entirely on the Metal GPU**, then executes the result on the same GPU. Three layers deep:
+A ~3,500-line self-hosting C compiler (`cc.c`) that compiles C source into ARM64 machine code **entirely on the Metal GPU**, then executes the result on the same GPU. Four layers deep:
 
 ```
-Host GCC compiles cc.c -> binary
-  GPU runs cc.c, compiles test.c -> binary
-    GPU runs test binary -> correct result
+Host GCC compiles cc.c -> compiler₀
+  GPU runs compiler₀, self-compiles cc.c -> compiler₁
+    GPU runs compiler₁, compiles test.c -> binary
+      GPU runs test binary -> correct result
 ```
 
 | Test Program | Binary | Cycles | Result |
 |-------------|--------|--------|--------|
-| arithmetic (42+13) | 92 B | 43K | 55 PASS |
-| fibonacci (iterative) | 264 B | 60K | 55 PASS |
-| factorial (recursive) | 192 B | 47K | 120 PASS |
-| bubble sort (5-elem) | 1,284 B | 91K | 12345 PASS |
-| structs (dot access) | 224 B | 49K | 30 PASS |
-| struct pointer (->)  | 216 B | 52K | 300 PASS |
-| arrays, pointers, for/while/do-while, ternary, sizeof, bitwise, short-circuit... | 92-1,284 B | 43-91K | **All PASS** |
+| arithmetic (42+13) | 100 B | 81K | 55 PASS |
+| fibonacci (iterative) | 280 B | 100K | 55 PASS |
+| factorial (recursive) | 208 B | 85K | 120 PASS |
+| bubble sort (5-elem) | 1,292 B | 133K | 12345 PASS |
+| enum, typedef, switch | 92-224 B | 82-94K | All PASS |
+| funcptr, union, #ifdef | 88-184 B | 77-84K | All PASS |
+| i++/++i/i--/--i ops | 140-152 B | 85K | All PASS |
+| large stack (>512B) | varies | varies | PASS |
+| ...and 24 more | 88-1,292 B | 77-133K | **All PASS** |
 
-Supports: structs (`.` and `->`), pointers, arrays, recursion, for/while/do-while, ternary, sizeof, compound assignment, bitwise ops, short-circuit evaluation, type casts. **20/20 test programs verified.**
+Supports: structs (`.`/`->`), pointers, arrays, recursion, for/while/do-while, ternary, sizeof, compound assignment, bitwise ops, short-circuit `&&`/`||`, type casts, `enum`, `typedef`, `switch`/`case`/`default`, `#ifdef`/`#ifndef`/`#endif`, global initializers, function pointers, `union`, `#include`, `__syscall()` intrinsics. **40/40 test programs verified, 11 bugs fixed, self-compilation verified.**
 
 ```bash
 python ncpu/os/gpu/programs/tools/cc_demo.py

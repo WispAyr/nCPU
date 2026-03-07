@@ -427,8 +427,14 @@ KERNEL_SOURCE_V2 = """
             if (rd != 31) regs[rd] = -regs[rm];
         }
         else if ((inst & 0xFFE0001F) == 0xEA00001F) {
-            // TST register - ANDS with Rd=XZR, discard result
-            int64_t result = regs[rn] & regs[rm];
+            // TST register 64-bit - ANDS with Rd=XZR, with optional shift
+            uint8_t stype = (inst >> 22) & 0x3;
+            uint8_t samt = (inst >> 10) & 0x3F;
+            int64_t rm_val = (rm == 31) ? 0 : regs[rm];
+            if (stype == 0) rm_val = rm_val << samt;
+            else if (stype == 1) rm_val = int64_t(uint64_t(rm_val) >> samt);
+            else if (stype == 2) rm_val = rm_val >> samt;
+            int64_t result = regs[rn] & rm_val;
             flag_n = (result < 0) ? 1.0f : 0.0f;
             flag_z = (result == 0) ? 1.0f : 0.0f;
             flag_c = 0.0f;
@@ -1403,14 +1409,25 @@ KERNEL_SOURCE_V2 = """
         }
 
         // ════════════════════════════════════════════════════════════════════
-        // ANDS REGISTER (0xEA - not the same as TST which requires rd=31)
+        // ANDS REGISTER with shift (64-bit: 0xEA, 32-bit: 0x6A)
         // ════════════════════════════════════════════════════════════════════
-        else if (op_byte == 0xEA) {
+        else if (op_byte == 0xEA || op_byte == 0x6A) {
+            uint8_t stype = (inst >> 22) & 0x3;
+            uint8_t samt = (inst >> 10) & 0x3F;
             int64_t rn_val = (rn == 31) ? 0 : regs[rn];
             int64_t rm_val = (rm == 31) ? 0 : regs[rm];
+            if (op_byte == 0x6A) { rn_val &= 0xFFFFFFFF; rm_val &= 0xFFFFFFFF; }
+            if (stype == 0) rm_val = rm_val << samt;
+            else if (stype == 1) rm_val = int64_t(uint64_t(rm_val) >> samt);
+            else if (stype == 2) rm_val = (op_byte == 0x6A) ? int64_t(int32_t(rm_val) >> samt) : (rm_val >> samt);
             int64_t result = rn_val & rm_val;
+            if (op_byte == 0x6A) result &= 0xFFFFFFFF;
             if (rd != 31) regs[rd] = result;
-            flag_n = (result < 0) ? 1.0f : 0.0f;
+            if (op_byte == 0x6A) {
+                flag_n = (result & 0x80000000) ? 1.0f : 0.0f;
+            } else {
+                flag_n = (result < 0) ? 1.0f : 0.0f;
+            }
             flag_z = (result == 0) ? 1.0f : 0.0f;
             flag_c = 0.0f;
             flag_v = 0.0f;
@@ -1995,6 +2012,17 @@ KERNEL_SOURCE_V2 = """
             vreg_hi[rt] = 0;
             vreg_lo[rt2_v] = load64(memory_out, addr + 8);
             vreg_hi[rt2_v] = 0;
+        }
+
+        // PC-RELATIVE LITERAL LOADS: LDR Wt(0x18)/Xt(0x58)/LDRSW(0x98)/PRFM(0xD8)
+        else if (op_byte == 0x18 || op_byte == 0x58 || op_byte == 0x98 || op_byte == 0xD8) {
+            if (op_byte != 0xD8 && rd != 31) {
+                int32_t offset = sign_extend_19(imm19) * 4;
+                uint64_t addr = uint64_t(int64_t(pc) + offset);
+                if (op_byte == 0x18) regs[rd] = int64_t(load32(memory_out, addr)) & 0xFFFFFFFF;
+                else if (op_byte == 0x58) regs[rd] = load64(memory_out, addr);
+                else regs[rd] = int64_t(int32_t(load32(memory_out, addr)));
+            }
         }
 
         // ════════════════════════════════════════════════════════════════════

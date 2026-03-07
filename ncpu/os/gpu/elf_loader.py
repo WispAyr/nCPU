@@ -68,6 +68,7 @@ AT_GID = 13
 AT_EGID = 14
 AT_HWCAP = 16     # Hardware capabilities
 AT_CLKTCK = 17    # Clock ticks per second
+AT_SECURE = 23    # Secure mode (0 = normal, avoids ppoll/openat on init)
 AT_RANDOM = 25    # Address of 16 random bytes
 AT_HWCAP2 = 26
 
@@ -312,11 +313,17 @@ def load_elf_into_memory(
     auxv.append((AT_EGID, 0))
     auxv.append((AT_HWCAP, 0))        # No special hardware caps
     auxv.append((AT_CLKTCK, 100))     # 100 Hz
+    auxv.append((AT_SECURE, 0))       # Non-secure (avoids ppoll/openat in musl init)
     auxv.append((AT_RANDOM, random_addr))
+    # Program headers — needed by musl for TLS init
     if info.phdr_vaddr:
         auxv.append((AT_PHDR, info.phdr_vaddr))
-        auxv.append((AT_PHENT, info.phdr_size))
-        auxv.append((AT_PHNUM, info.phdr_count))
+    elif info.segments:
+        # Fallback: phdr is at first segment's vaddr + e_phoff
+        e_phoff = struct.unpack_from('<Q', data, 32)[0]
+        auxv.append((AT_PHDR, info.segments[0].vaddr + e_phoff))
+    auxv.append((AT_PHENT, info.phdr_size))
+    auxv.append((AT_PHNUM, info.phdr_count))
     auxv.append((AT_NULL, 0))
 
     # Calculate total stack frame size
@@ -434,6 +441,54 @@ def load_and_run_elf(
     return results
 
 
+def _pack_stat64(info: dict) -> bytes:
+    """Pack a filesystem stat result into a Linux aarch64 stat64 struct (128 bytes).
+
+    Linux aarch64 struct stat layout:
+        0:  st_dev      (uint64)    8:  st_ino      (uint64)
+        16: st_mode     (uint32)    20: st_nlink    (uint32)
+        24: st_uid      (uint32)    28: st_gid      (uint32)
+        32: st_rdev     (uint64)    40: __pad1      (int64)
+        48: st_size     (int64)     56: st_blksize  (int32)
+        60: __pad2      (int32)     64: st_blocks   (int64)
+        72: st_atime    (int64)     80: st_atime_ns (int64)
+        88: st_mtime    (int64)     96: st_mtime_ns (int64)
+        104: st_ctime   (int64)     112: st_ctime_ns(int64)
+        120: __unused4  (int32)     124: __unused5   (int32)
+    """
+    is_dir = info.get("type") == "dir"
+    size = info.get("size", 0)
+    path = info.get("path", "/")
+
+    st_ino = hash(path) & 0xFFFFFFFFFFFFFFFF
+    st_mode = 0o040755 if is_dir else 0o100644
+    st_nlink = 2 if is_dir else 1
+    st_size = 0 if is_dir else size
+    st_blocks = (st_size + 511) // 512
+
+    import time as _time
+    now = int(_time.time())
+
+    return struct.pack(
+        '<QQIIIIQqqiiqqqqqqqii',
+        1,                  # st_dev
+        st_ino,             # st_ino
+        st_mode,            # st_mode
+        st_nlink,           # st_nlink
+        0, 0,               # st_uid, st_gid
+        0,                  # st_rdev
+        0,                  # __pad1
+        st_size,            # st_size
+        4096,               # st_blksize
+        0,                  # __pad2
+        st_blocks,          # st_blocks
+        now, 0,             # st_atime, st_atime_nsec
+        now, 0,             # st_mtime, st_mtime_nsec
+        now, 0,             # st_ctime, st_ctime_nsec
+        0, 0,               # __unused4, __unused5
+    )
+
+
 def make_busybox_syscall_handler(filesystem=None, heap_base=None):
     """Create a syscall handler with additional syscalls needed by musl/busybox.
 
@@ -484,6 +539,14 @@ def make_busybox_syscall_handler(filesystem=None, heap_base=None):
     SYS_CLONE = 220
     SYS_READLINKAT = 78
     SYS_FACCESSAT = 48
+    SYS_RENAMEAT = 38
+    SYS_STATFS = 43
+    SYS_FCHMOD = 52
+    SYS_FCHOWN = 55
+    SYS_PREAD64 = 67
+    SYS_PWRITE64 = 68
+    SYS_UTIMENSAT = 88
+    SYS_SYSINFO = 179
 
     _heap_base = heap_base if heap_base else HEAP_BASE
     heap_break = _heap_base
@@ -704,27 +767,27 @@ def make_busybox_syscall_handler(filesystem=None, heap_base=None):
             path_addr = x1
             buf_addr = x2
             flags = x3
+            AT_EMPTY_PATH = 0x1000
+
+            info = None
             if path_addr:
                 path = read_string_from_gpu(cpu, path_addr)
             else:
                 path = ""
 
             if filesystem:
-                info = filesystem.stat(path) if hasattr(filesystem, 'stat') else None
-                if info is None:
-                    # Try fstat on dirfd
+                if path:
+                    info = filesystem.stat(path)
+                if info is None and (not path or (flags & AT_EMPTY_PATH)):
+                    # Empty path with AT_EMPTY_PATH → fstat on dirfd
                     info = filesystem.fstat(dirfd) if dirfd >= 0 else None
 
             if info:
-                # Write minimal stat64 struct (only the fields busybox checks)
-                stat_buf = b'\x00' * 128  # Zero-fill
+                stat_buf = _pack_stat64(info)
                 cpu.write_memory(buf_addr, stat_buf)
                 cpu.set_register(0, 0)
             else:
-                # Fill with reasonable defaults for "/"
-                stat_buf = b'\x00' * 128
-                cpu.write_memory(buf_addr, stat_buf)
-                cpu.set_register(0, 0)
+                cpu.set_register(0, -2)  # -ENOENT
             return True
 
         elif syscall_num == SYS_READLINKAT:
@@ -741,6 +804,125 @@ def make_busybox_syscall_handler(filesystem=None, heap_base=None):
                 cpu.set_register(0, 0 if exists else -2)  # -ENOENT
             else:
                 cpu.set_register(0, -2)
+            return True
+
+        elif syscall_num == SYS_PREAD64:
+            # pread64(fd, buf, count, offset) — positional read
+            fd = x0
+            buf_addr = x1
+            count = x2
+            pos = x3
+            if filesystem and fd in filesystem.fd_table:
+                entry = filesystem.fd_table[fd]
+                saved_offset = entry["offset"]
+                entry["offset"] = pos
+                data = filesystem.read(fd, count)
+                entry["offset"] = saved_offset
+                if data is not None:
+                    cpu.write_memory(buf_addr, data)
+                    cpu.set_register(0, len(data))
+                else:
+                    cpu.set_register(0, -9)  # -EBADF
+            else:
+                cpu.set_register(0, -9)  # -EBADF
+            return True
+
+        elif syscall_num == SYS_PWRITE64:
+            # pwrite64(fd, buf, count, offset) — positional write
+            fd = x0
+            buf_addr = x1
+            count = x2
+            pos = x3
+            if filesystem and fd in filesystem.fd_table:
+                entry = filesystem.fd_table[fd]
+                saved_offset = entry["offset"]
+                entry["offset"] = pos
+                data = cpu.read_memory(buf_addr, count)
+                written = filesystem.write(fd, data)
+                entry["offset"] = saved_offset
+                cpu.set_register(0, written if written >= 0 else -9)
+            else:
+                cpu.set_register(0, -9)  # -EBADF
+            return True
+
+        elif syscall_num == SYS_RENAMEAT:
+            # renameat(olddirfd, oldpath, newdirfd, newpath)
+            old_path = read_string_from_gpu(cpu, x1)
+            new_path = read_string_from_gpu(cpu, x3)
+            if filesystem:
+                result = filesystem.rename(old_path, new_path)
+                cpu.set_register(0, result)
+            else:
+                cpu.set_register(0, -2)  # -ENOENT
+            return True
+
+        elif syscall_num == SYS_FCHMOD:
+            # fchmod(fd, mode) — stub, no real permissions
+            cpu.set_register(0, 0)
+            return True
+
+        elif syscall_num == SYS_FCHOWN:
+            # fchown(fd, owner, group) — stub
+            cpu.set_register(0, 0)
+            return True
+
+        elif syscall_num == SYS_UTIMENSAT:
+            # utimensat(dirfd, path, times, flags) — stub
+            cpu.set_register(0, 0)
+            return True
+
+        elif syscall_num == SYS_STATFS:
+            # statfs(path, buf) — return fake statfs struct
+            buf_addr = x1
+            # struct statfs: f_type(8), f_bsize(8), f_blocks(8), f_bfree(8),
+            #   f_bavail(8), f_files(8), f_ffree(8), f_fsid(8), f_namelen(8),
+            #   f_frsize(8), f_flags(8), f_spare[4](32) = 120 bytes
+            statfs_buf = struct.pack('<qqqqqqqqqqq',
+                0x4E435055,   # f_type "NCPU" magic
+                4096,         # f_bsize
+                1048576,      # f_blocks (4GB)
+                524288,       # f_bfree
+                524288,       # f_bavail
+                65536,        # f_files
+                32768,        # f_ffree
+                0,            # f_fsid
+                255,          # f_namelen
+                4096,         # f_frsize
+                0,            # f_flags
+            )
+            statfs_buf += b'\x00' * (120 - len(statfs_buf))
+            cpu.write_memory(buf_addr, statfs_buf)
+            cpu.set_register(0, 0)
+            return True
+
+        elif syscall_num == SYS_SYSINFO:
+            # sysinfo(buf) — return fake sysinfo struct
+            buf_addr = x0
+            import time as _time
+            uptime = int(_time.time()) % 86400
+            # struct sysinfo (112 bytes on aarch64):
+            #   uptime(8), loads[3](24), totalram(8), freeram(8),
+            #   sharedram(8), bufferram(8), totalswap(8), freeswap(8),
+            #   procs(2), pad(2), pad2(4), totalhigh(8), freehigh(8), mem_unit(4), pad3(4)
+            sysinfo_buf = struct.pack('<q3qqqqqqqHHIqqII',
+                uptime,            # uptime
+                0, 0, 0,           # loads[3]
+                256 * 1024 * 1024, # totalram (256MB)
+                128 * 1024 * 1024, # freeram
+                0,                 # sharedram
+                0,                 # bufferram
+                0,                 # totalswap
+                0,                 # freeswap
+                1,                 # procs
+                0,                 # pad
+                0,                 # pad2
+                0,                 # totalhigh
+                0,                 # freehigh
+                1,                 # mem_unit
+                0,                 # pad3
+            )
+            cpu.write_memory(buf_addr, sysinfo_buf)
+            cpu.set_register(0, 0)
             return True
 
         elif syscall_num == SYS_PPOLL:
