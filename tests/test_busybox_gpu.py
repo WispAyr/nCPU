@@ -462,7 +462,8 @@ class TestLDRLiteral:
         base = 0x10000
 
         # MOVZ X5, #42  (to verify execution continues past PRFM)
-        movz = (0xD2 << 24) | (42 << 5) | 5
+        # MOVZ 64-bit base is 0xD2800000 (bit 23 must be set to distinguish from EOR imm)
+        movz = 0xD2800000 | (42 << 5) | 5
         cpu.write_memory(base, struct.pack('<I', movz))
 
         # PRFM [PC+8]: op_byte=0xD8, imm19=2, rd=0

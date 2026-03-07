@@ -779,7 +779,9 @@ static void lex(void) {
     }
 
     /* EOF token */
+    printf("[cc] lex: T_EOF=%d, n_tokens=%d\n", T_EOF, n_tokens);
     tokens[n_tokens].type = T_EOF;
+    printf("[cc] lex: after set, tokens[%d].type = %ld\n", n_tokens, tokens[n_tokens].type);
     tokens[n_tokens].line = line;
     tokens[n_tokens].name[0] = '\0';
 }
@@ -1290,38 +1292,34 @@ static void emit_epilogue(void) {
 /* LOCAL VARIABLE ACCESS                                                    */
 /* ======================================================================== */
 
-/* Locals are stored at [FP, #-offset] where offset increases from 16 */
+/* Locals are stored at [FP, #+offset] where offset increases from 16.
+ * FP/LR occupy [FP+0] and [FP+8], so locals start at [FP+16]. */
 static int alloc_local(int size) {
     size = (size + 7) & ~7;  /* align to 8 */
+    int off = stack_offset;
     stack_offset += size;
-    return -stack_offset;  /* negative offset from FP */
+    return off;  /* positive offset from FP */
 }
 
-/* Load local variable into register */
+/* Load local variable into register (unsigned offset, supports large frames) */
 static void emit_load_local(int rd, int offset, int type) {
     if (types[type].kind == TY_CHAR) {
-        /* LDURB (unscaled offset for negative) */
-        emit(0x38400000 | (((unsigned int)offset & 0x1FF) << 12) | (FP << 5) | rd);
+        emit_ldrb(rd, FP, offset);
     } else if (types[type].size == 4) {
-        /* LDURSW (sign-extend 32 to 64) */
-        emit(0xB8800000 | (((unsigned int)offset & 0x1FF) << 12) | (FP << 5) | rd);
+        emit_ldrsw(rd, FP, offset);
     } else {
-        /* LDUR X (64-bit) */
-        emit(0xF8400000 | (((unsigned int)offset & 0x1FF) << 12) | (FP << 5) | rd);
+        emit_ldr(rd, FP, offset);
     }
 }
 
-/* Store register to local variable */
+/* Store register to local variable (unsigned offset, supports large frames) */
 static void emit_store_local(int rs, int offset, int type) {
     if (types[type].kind == TY_CHAR) {
-        /* STURB */
-        emit(0x38000000 | (((unsigned int)offset & 0x1FF) << 12) | (FP << 5) | rs);
+        emit_strb(rs, FP, offset);
     } else if (types[type].size == 4) {
-        /* STUR W */
-        emit(0xB8000000 | (((unsigned int)offset & 0x1FF) << 12) | (FP << 5) | rs);
+        emit_str32(rs, FP, offset);
     } else {
-        /* STUR X */
-        emit(0xF8000000 | (((unsigned int)offset & 0x1FF) << 12) | (FP << 5) | rs);
+        emit_str(rs, FP, offset);
     }
 }
 
@@ -1408,6 +1406,8 @@ static int expr_type;  /* type of last expression result */
 static int last_lval_kind;   /* -1 = none, SYM_LOCAL/SYM_PARAM/SYM_GLOBAL */
 static int last_lval_offset; /* stack offset (local/param) or data offset (global) */
 static int last_lval_type;   /* variable type */
+static int last_subscript_addr_off;  /* stack slot with computed arr[idx] address, or -1 */
+static int last_subscript_elem_type; /* element type for subscript store */
 
 /* ======================================================================== */
 /* TYPE PARSER                                                              */
@@ -1647,6 +1647,7 @@ static int parse_type(void) {
 static int parse_primary(void) {
     if (had_error) return 0;
     last_lval_kind = -1;  /* Reset lvalue tracking */
+    last_subscript_addr_off = -1;  /* Reset subscript tracking */
 
     /* Number literal */
     if (check(T_NUM)) {
@@ -1789,9 +1790,10 @@ static int parse_primary(void) {
             struct Symbol *fn = find_symbol(name);
             int is_funcptr = 0;
             if (!fn) {
-                /* Implicit declaration */
+                /* Implicit declaration — use offset -1 so it gets a fresh label */
                 fn = add_symbol(name, ty_int, SYM_FUNC);
                 fn->scope = 0;
+                fn->offset = -1;
             } else if (fn->kind != SYM_FUNC) {
                 /* Calling through a function pointer variable */
                 is_funcptr = 1;
@@ -1897,7 +1899,6 @@ static int parse_primary(void) {
         if (sym->kind == SYM_LOCAL || sym->kind == SYM_PARAM) {
             if (types[sym->type].kind == TY_ARRAY) {
                 /* Array decays to pointer — load address */
-                emit_add_imm(r, FP, 0);
                 int off = sym->offset;
                 if (off < 0) {
                     emit_li(r, (long)off);
@@ -1983,6 +1984,11 @@ static int parse_postfix(void) {
                 /* For struct elements, keep address for . or -> access */
                 expr_type = elem_type;
             } else {
+                /* Save address for potential assignment (avoids reparse side effects) */
+                last_subscript_addr_off = alloc_local(8);
+                last_subscript_elem_type = elem_type;
+                emit_store_local(r, last_subscript_addr_off, ty_long);
+
                 /* Load scalar value */
                 int rd = alloc_reg();
                 emit_load_indirect(rd, r, elem_type);
@@ -2395,6 +2401,23 @@ static int parse_assign(void) {
 
         advance();
         free_reg(r);
+
+        /* Fast path: if we have a saved subscript address from parse_postfix,
+         * use it directly without reparsing (avoids double side effects like j++) */
+        if (op == T_ASSIGN && last_subscript_addr_off >= 0) {
+            int saved_off = last_subscript_addr_off;
+            int saved_type = last_subscript_elem_type;
+            last_subscript_addr_off = -1;
+            last_subscript_elem_type = -1;
+
+            int rval = parse_assign();
+
+            int addr = alloc_reg();
+            emit_load_local(addr, saved_off, ty_long);
+            emit_store_indirect(rval, addr, saved_type);
+            free_reg(addr);
+            return rval;
+        }
 
         /* Reparse as lvalue */
         int old_pos = tok_pos;
@@ -2820,6 +2843,7 @@ static void parse_stmt(void) {
         enter_scope();
 
         int next_case_lbl = -1; /* label for next case comparison */
+        int case_body_lbl = -1; /* shared body label for fall-through case groups */
 
         while (!check(T_RBRACE) && !check(T_EOF) && !had_error) {
             if (match(T_CASE)) {
@@ -2851,6 +2875,18 @@ static void parse_stmt(void) {
                 free_reg(tmp);
                 free_reg(cv);
                 emit_bcond(COND_NE, next_case_lbl);
+
+                /* Handle fall-through: if next token is another case/default,
+                 * this case has no body — jump to shared body label on match */
+                if (check(T_CASE) || check(T_DEFAULT)) {
+                    if (case_body_lbl < 0) case_body_lbl = new_label();
+                    emit_b(case_body_lbl);
+                } else if (case_body_lbl >= 0) {
+                    /* Last case in fall-through group: mark body label here */
+                    mark_label(case_body_lbl);
+                    case_body_lbl = -1;
+                }
+
                 reset_regs();
                 continue;
             }
@@ -2859,6 +2895,11 @@ static void parse_stmt(void) {
                 if (next_case_lbl >= 0) mark_label(next_case_lbl);
                 next_case_lbl = -1;
                 expect(T_COLON);
+                /* Mark fall-through body label if cases preceded default */
+                if (case_body_lbl >= 0) {
+                    mark_label(case_body_lbl);
+                    case_body_lbl = -1;
+                }
                 continue;
             }
 
@@ -3324,6 +3365,7 @@ static void compile(void) {
     tok_pos = 0;
 
     printf("[cc] Lexed %d tokens\n", n_tokens);
+    printf("[cc] EOF check: tokens[%d].type = %ld\n", n_tokens, tokens[n_tokens].type);
 
     /* Emit startup code first (BL main will be a forward fixup) */
     int main_label = new_label();
@@ -3340,6 +3382,8 @@ static void compile(void) {
     emit_svc();
 
     /* Parse all top-level declarations */
+    printf("[cc] Pre-parse: tokens[%d].type = %ld, check(EOF)=%d\n",
+           n_tokens, tokens[n_tokens].type, check(T_EOF));
     while (!check(T_EOF) && !had_error) {
         parse_global_decl();
     }

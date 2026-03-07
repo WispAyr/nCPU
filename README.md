@@ -130,7 +130,7 @@ Host GCC compiles cc.c -> compiler₀
 | large stack (>512B) | varies | varies | PASS |
 | ...and 24 more | 88-1,292 B | 77-133K | **All PASS** |
 
-Supports: structs (`.`/`->`), pointers, arrays, recursion, for/while/do-while, ternary, sizeof, compound assignment, bitwise ops, short-circuit `&&`/`||`, type casts, `enum`, `typedef`, `switch`/`case`/`default`, `#ifdef`/`#ifndef`/`#endif`, global initializers, function pointers, `union`, `#include`, `__syscall()` intrinsics. **40/40 test programs verified, 11 bugs fixed, self-compilation verified.**
+Supports: structs (`.`/`->`), pointers, arrays, recursion, for/while/do-while, ternary, sizeof, compound assignment, bitwise ops, short-circuit `&&`/`||`, type casts, `enum`, `typedef`, `switch`/`case`/`default`, `#ifdef`/`#ifndef`/`#endif`, global initializers, function pointers, `union`, `#include`, `__syscall()` intrinsics. **40/40 test programs verified, 14 bugs fixed, self-compilation verified.**
 
 ```bash
 python ncpu/os/gpu/programs/tools/cc_demo.py

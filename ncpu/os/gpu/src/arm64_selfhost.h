@@ -145,6 +145,16 @@ char *strchr(const char *s, int c) {
     return NULL;
 }
 
+char *strrchr(const char *s, int c) {
+    char *last = NULL;
+    while (*s) {
+        if (*s == (char)c) last = (char *)s;
+        s++;
+    }
+    if (c == 0) return (char *)s;
+    return last;
+}
+
 void *memcpy(void *dst, const void *src, int n) {
     char *d = (char *)dst;
     char *s = (char *)src;
@@ -158,6 +168,16 @@ void *memset(void *s, int c, int n) {
     int i;
     for (i = 0; i < n; i++) p[i] = (char)c;
     return s;
+}
+
+int memcmp(const void *a, const void *b, int n) {
+    const char *pa = (const char *)a;
+    const char *pb = (const char *)b;
+    int i;
+    for (i = 0; i < n; i++) {
+        if (pa[i] != pb[i]) return pa[i] - pb[i];
+    }
+    return 0;
 }
 
 long strtol(const char *s, char *endp, int base) {

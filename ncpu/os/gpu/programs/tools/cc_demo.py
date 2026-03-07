@@ -463,6 +463,28 @@ int main(void) {
         "expected": 30,
     },
 
+    "switch_fallthrough": {
+        "source": """\
+int main(void) {
+    int x = 2;
+    int result = 0;
+    switch (x) {
+        case 1: case 2: case 3:
+            result = 10;
+            break;
+        case 4: case 5:
+            result = 20;
+            break;
+        default:
+            result = 99;
+            break;
+    }
+    return result;
+}
+""",
+        "expected": 10,
+    },
+
     "ifdef_basic": {
         "source": """\
 #define FOO 1

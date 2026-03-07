@@ -106,6 +106,14 @@ inline void store32(device uint8_t* memory, uint64_t addr, int32_t val) {
     memory[addr + 3] = uint8_t((val >> 24) & 0xFF);
 }
 
+inline int64_t load8(device uint8_t* memory, uint64_t addr) {
+    return int64_t(memory[addr]);
+}
+
+inline void store8(device uint8_t* memory, uint64_t addr, uint8_t val) {
+    memory[addr] = val;
+}
+
 inline int64_t load16(device uint8_t* memory, uint64_t addr) {
     return int64_t(memory[addr]) | (int64_t(memory[addr + 1]) << 8);
 }
@@ -240,6 +248,7 @@ inline int64_t apply_extension(int64_t val, uint8_t ext_type) {
 # ═══════════════════════════════════════════════════════════════════════════════
 
 KERNEL_SOURCE_V2 = """
+
     // ════════════════════════════════════════════════════════════════════════
     // KERNEL ENTRY
     // ════════════════════════════════════════════════════════════════════════
@@ -310,520 +319,376 @@ KERNEL_SOURCE_V2 = """
             reason = STOP_SYSCALL;
             break;
         }
-
-        bool branch_taken = false;
-
-        // ════════════════════════════════════════════════════════════════════
-        // NOP
-        // ════════════════════════════════════════════════════════════════════
-        if (inst == 0xD503201F) {
-            // NOP
-        }
-        // ERET
-        else if (inst == 0xD69F03E0) {
-            // Simplified: halt (no exception stack on GPU)
+        // CHECK BRK (software breakpoint — abort/trap)
+        if ((inst & 0xFFE0001F) == 0xD4200000) {
             reason = STOP_HALT;
             break;
         }
 
-        // ════════════════════════════════════════════════════════════════════
-        // SYSTEM INSTRUCTIONS (0xD5 prefix)
-        // ════════════════════════════════════════════════════════════════════
-        else if ((inst & 0xFFFFF0FF) == 0xD50330BF) { /* DMB - no-op */ }
-        else if ((inst & 0xFFFFF0FF) == 0xD503309F) { /* DSB - no-op */ }
-        else if ((inst & 0xFFFFF0FF) == 0xD50330DF) { /* ISB - no-op */ }
-        else if ((inst & 0xFFF00000) == 0xD5300000) {
-            // MRS - simplified: return 0 for all system registers
-            if (rd != 31) regs[rd] = 0;
-        }
-        else if ((inst & 0xFFF00000) == 0xD5100000) {
-            // MSR - simplified: discard writes
-        }
+        bool branch_taken = false;
+        bool halt_break = false;
 
         // ════════════════════════════════════════════════════════════════════
-        // BIT MANIPULATION (0xDA prefix - must be before CSINV/CSNEG)
+        // INSTRUCTION DECODE — switch(op_byte)
         // ════════════════════════════════════════════════════════════════════
-        else if ((inst & 0xFFFFFC00) == 0xDAC01000) {
-            // CLZ - Count leading zeros
-            uint64_t val = uint64_t(regs[rn]) ;
-            int64_t count = 64;
-            for (int i = 63; i >= 0; i--) {
-                if (val & (uint64_t(1) << i)) { count = 63 - i; break; }
-            }
-            if (rd != 31) regs[rd] = count;
-        }
-        else if ((inst & 0xFFFFFC00) == 0xDAC00000) {
-            // RBIT - Reverse bits
-            uint64_t val = uint64_t(regs[rn]);
-            uint64_t result = 0;
-            for (int i = 0; i < 64; i++) {
-                if (val & (uint64_t(1) << i)) result |= uint64_t(1) << (63 - i);
-            }
-            if (rd != 31) regs[rd] = int64_t(result);
-        }
-        else if ((inst & 0xFFFFFC00) == 0xDAC00C00) {
-            // REV - Reverse bytes (64-bit)
-            uint64_t val = uint64_t(regs[rn]);
-            uint64_t result = 0;
-            for (int i = 0; i < 8; i++) {
-                uint64_t b = (val >> (i * 8)) & 0xFF;
-                result |= b << ((7 - i) * 8);
-            }
-            if (rd != 31) regs[rd] = int64_t(result);
-        }
-        else if ((inst & 0xFFFFFC00) == 0xDAC00400) {
-            // REV16 - Reverse bytes in each 16-bit halfword
-            uint64_t val = uint64_t(regs[rn]);
-            uint64_t result = 0;
-            for (int i = 0; i < 4; i++) {
-                uint64_t hw_val = (val >> (i * 16)) & 0xFFFF;
-                uint64_t b0 = hw_val & 0xFF, b1 = (hw_val >> 8) & 0xFF;
-                result |= ((b0 << 8) | b1) << (i * 16);
-            }
-            if (rd != 31) regs[rd] = int64_t(result);
-        }
-        else if ((inst & 0xFFFFFC00) == 0xDAC00800) {
-            // REV32 - Reverse bytes in each 32-bit word
-            uint64_t val = uint64_t(regs[rn]);
-            uint64_t result = 0;
-            for (int i = 0; i < 2; i++) {
-                uint64_t word = (val >> (i * 32)) & 0xFFFFFFFF;
-                uint64_t rev = 0;
-                for (int j = 0; j < 4; j++) {
-                    rev |= ((word >> (j * 8)) & 0xFF) << ((3 - j) * 8);
-                }
-                result |= rev << (i * 32);
-            }
-            if (rd != 31) regs[rd] = int64_t(result);
-        }
+        switch (op_byte) {
 
-        // ════════════════════════════════════════════════════════════════════
-        // EXTENSION ALIASES (before generic UBFM/SBFM)
-        // ════════════════════════════════════════════════════════════════════
-        else if ((inst & 0xFFFFFC00) == 0x93407C00) {
-            // SXTW - Sign extend 32-bit to 64-bit
-            int64_t val = regs[rn] & 0xFFFFFFFF;
-            if (val & 0x80000000) val |= int64_t(0xFFFFFFFF00000000);
-            if (rd != 31) regs[rd] = val;
-        }
-        else if ((inst & 0xFFFFFC00) == 0xD3401C00) {
-            // UXTB - Zero extend byte
-            if (rd != 31) regs[rd] = regs[rn] & 0xFF;
-        }
-        else if ((inst & 0xFFFFFC00) == 0xD3403C00) {
-            // UXTH - Zero extend halfword
-            if (rd != 31) regs[rd] = regs[rn] & 0xFFFF;
-        }
-
-        // ════════════════════════════════════════════════════════════════════
-        // MVN, NEG, TST, BIC (specific patterns before generic ALU)
-        // ════════════════════════════════════════════════════════════════════
-        else if ((inst & 0xFFE0FFE0) == 0xAA2003E0) {
-            // MVN - Bitwise NOT: ORN Xd, XZR, Xm
-            if (rd != 31) regs[rd] = ~regs[rm];
-        }
-        else if ((inst & 0xFFE0FFE0) == 0xCB0003E0) {
-            // NEG - Negate: SUB Xd, XZR, Xm
-            if (rd != 31) regs[rd] = -regs[rm];
-        }
-        else if ((inst & 0xFFE0001F) == 0xEA00001F) {
-            // TST register 64-bit - ANDS with Rd=XZR, with optional shift
+        case 0x0A: { // AND register 32-bit
             uint8_t stype = (inst >> 22) & 0x3;
             uint8_t samt = (inst >> 10) & 0x3F;
+            int64_t rn_val = (rn == 31) ? 0 : regs[rn];
             int64_t rm_val = (rm == 31) ? 0 : regs[rm];
             if (stype == 0) rm_val = rm_val << samt;
             else if (stype == 1) rm_val = int64_t(uint64_t(rm_val) >> samt);
             else if (stype == 2) rm_val = rm_val >> samt;
-            int64_t result = regs[rn] & rm_val;
-            flag_n = (result < 0) ? 1.0f : 0.0f;
-            flag_z = (result == 0) ? 1.0f : 0.0f;
-            flag_c = 0.0f;
-            flag_v = 0.0f;
+            else if (stype == 3) rm_val = int64_t((uint64_t(rm_val) >> samt) | (uint64_t(rm_val) << (32 - samt))) & 0xFFFFFFFF;
+            if (rd != 31) regs[rd] = (rn_val & rm_val) & 0xFFFFFFFF;
+            break;
         }
-        else if ((inst & 0xFFE00000) == 0x8A200000) {
-            // BIC - AND NOT: Xd = Xn & ~Xm
+
+        case 0x0B: { // ADD register 32-bit
+            uint8_t stype = (inst >> 22) & 0x3;
+            uint8_t samt = (inst >> 10) & 0x3F;
             int64_t rn_val = (rn == 31) ? 0 : regs[rn];
             int64_t rm_val = (rm == 31) ? 0 : regs[rm];
-            if (rd != 31) regs[rd] = rn_val & (~rm_val);
+            if (stype == 0) rm_val = rm_val << samt;
+            else if (stype == 1) rm_val = int64_t(uint64_t(rm_val) >> samt);
+            else if (stype == 2) rm_val = rm_val >> samt;
+            if (rd != 31) regs[rd] = (rn_val + rm_val) & 0xFFFFFFFF;
+            break;
         }
 
-        // ════════════════════════════════════════════════════════════════════
-        // SHIFT REGISTERS (0x9AC0 prefix)
-        // ════════════════════════════════════════════════════════════════════
-        else if ((inst & 0xFFE0FC00) == 0x9AC02000) {
-            // LSL register
-            int64_t shift = regs[rm] & 63;
-            if (rd != 31) regs[rd] = regs[rn] << shift;
-        }
-        else if ((inst & 0xFFE0FC00) == 0x9AC02400) {
-            // LSR register (logical, unsigned)
-            uint64_t val = uint64_t(regs[rn]);
-            int64_t shift = regs[rm] & 63;
-            if (rd != 31) regs[rd] = int64_t(val >> shift);
-        }
-        else if ((inst & 0xFFE0FC00) == 0x9AC02800) {
-            // ASR register (arithmetic, signed)
-            int64_t shift = regs[rm] & 63;
-            if (rd != 31) regs[rd] = regs[rn] >> shift;
-        }
-        else if ((inst & 0xFFE0FC00) == 0x9AC02C00) {
-            // ROR register
-            uint64_t val = uint64_t(regs[rn]);
-            int64_t shift = regs[rm] & 63;
-            if (shift > 0) {
-                val = (val >> shift) | (val << (64 - shift));
-            }
-            if (rd != 31) regs[rd] = int64_t(val);
+        case 0x2B: { // ADDS register 32-bit (sets flags)
+            uint8_t stype = (inst >> 22) & 0x3;
+            uint8_t samt = (inst >> 10) & 0x3F;
+            int64_t rn_val = (rn == 31) ? 0 : regs[rn];
+            int64_t rm_val = (rm == 31) ? 0 : regs[rm];
+            if (stype == 0) rm_val = rm_val << samt;
+            else if (stype == 1) rm_val = int64_t(uint64_t(rm_val) >> samt);
+            else if (stype == 2) rm_val = rm_val >> samt;
+            uint32_t a32 = uint32_t(rn_val);
+            uint32_t b32 = uint32_t(rm_val);
+            uint32_t r32 = a32 + b32;
+            int64_t result = int64_t(r32);
+            if (rd != 31) regs[rd] = result;
+            flag_n = ((r32 & 0x80000000u) != 0) ? 1.0f : 0.0f;
+            flag_z = (r32 == 0) ? 1.0f : 0.0f;
+            flag_c = (uint64_t(a32) + uint64_t(b32) > 0xFFFFFFFFu) ? 1.0f : 0.0f;
+            flag_v = ((~(a32 ^ b32)) & (a32 ^ r32) & 0x80000000u) ? 1.0f : 0.0f;
+            break;
         }
 
-        // ════════════════════════════════════════════════════════════════════
-        // DIVISION (0x9AC0 prefix, different function codes)
-        // ════════════════════════════════════════════════════════════════════
-        else if ((inst & 0xFFE0FC00) == 0x9AC00C00) {
-            // SDIV - Signed division
-            int64_t divisor = regs[rm];
-            if (divisor != 0) {
-                if (rd != 31) regs[rd] = regs[rn] / divisor;
+        case 0x10: { // ADR
+            uint32_t immlo = (inst >> 29) & 0x3;
+            uint32_t immhi = (inst >> 5) & 0x7FFFF;
+            int32_t offset = sign_extend_21((immhi << 2) | immlo);
+            if (rd != 31) regs[rd] = int64_t(pc) + offset;
+            break;
+        }
+
+        case 0x11: { // ADD immediate 32-bit
+            int64_t rn_val = regs[rn];
+            int64_t aimm = ((inst >> 22) & 1) ? (int64_t(imm12) << 12) : int64_t(imm12);
+            regs[rd] = (rn_val + aimm) & 0xFFFFFFFF;
+            break;
+        }
+
+        case 0x12: { // MOVN 32-bit / AND immediate 32-bit
+            if ((inst >> 23) & 1) {
+                // MOVN 32-bit
+                if (rd != 31) regs[rd] = (~(int64_t(imm16) << (hw * 16))) & 0xFFFFFFFF;
             } else {
-                if (rd != 31) regs[rd] = 0;
-            }
-        }
-        else if ((inst & 0xFFE0FC00) == 0x9AC00800) {
-            // UDIV - Unsigned division
-            uint64_t divisor = uint64_t(regs[rm]);
-            if (divisor != 0) {
-                if (rd != 31) regs[rd] = int64_t(uint64_t(regs[rn]) / divisor);
-            } else {
-                if (rd != 31) regs[rd] = 0;
-            }
-        }
-
-        // ════════════════════════════════════════════════════════════════════
-        // CONDITIONAL SELECT (0x9A8 / 0xDA8 prefix)
-        // ════════════════════════════════════════════════════════════════════
-        else if ((inst & 0xFFE00C00) == 0x9A800000) {
-            // CSEL 64-bit: Rd = cond ? Rn : Rm (rn/rm=31 → XZR)
-            uint8_t cc = (inst >> 12) & 0xF;
-            bool take = eval_condition(cc, flag_n, flag_z, flag_c, flag_v);
-            int64_t rn_val = (rn == 31) ? 0 : regs[rn];
-            int64_t rm_val = (rm == 31) ? 0 : regs[rm];
-            if (rd != 31) regs[rd] = take ? rn_val : rm_val;
-        }
-        else if ((inst & 0xFFE00C00) == 0x9A800400) {
-            // CSINC 64-bit: Rd = cond ? Rn : Rm+1 (rn/rm=31 → XZR; CSET when rn=rm=31)
-            uint8_t cc = (inst >> 12) & 0xF;
-            bool take = eval_condition(cc, flag_n, flag_z, flag_c, flag_v);
-            int64_t rn_val = (rn == 31) ? 0 : regs[rn];
-            int64_t rm_val = (rm == 31) ? 0 : regs[rm];
-            if (rd != 31) regs[rd] = take ? rn_val : (rm_val + 1);
-        }
-        else if ((inst & 0xFFE00C00) == 0xDA800000) {
-            // CSINV 64-bit: Rd = cond ? Rn : ~Rm (rn/rm=31 → XZR)
-            uint8_t cc = (inst >> 12) & 0xF;
-            bool take = eval_condition(cc, flag_n, flag_z, flag_c, flag_v);
-            int64_t rn_val = (rn == 31) ? 0 : regs[rn];
-            int64_t rm_val = (rm == 31) ? 0 : regs[rm];
-            if (rd != 31) regs[rd] = take ? rn_val : (~rm_val);
-        }
-        else if ((inst & 0xFFE00C00) == 0xDA800400) {
-            // CSNEG 64-bit: Rd = cond ? Rn : -Rm (rn/rm=31 → XZR)
-            uint8_t cc = (inst >> 12) & 0xF;
-            bool take = eval_condition(cc, flag_n, flag_z, flag_c, flag_v);
-            int64_t rn_val = (rn == 31) ? 0 : regs[rn];
-            int64_t rm_val = (rm == 31) ? 0 : regs[rm];
-            if (rd != 31) regs[rd] = take ? rn_val : (-rm_val);
-        }
-        else if ((inst & 0xFFE00C00) == 0x1A800000) {
-            // CSEL 32-bit (rn/rm=31 → WZR)
-            uint8_t cc = (inst >> 12) & 0xF;
-            bool take = eval_condition(cc, flag_n, flag_z, flag_c, flag_v);
-            int64_t rn_val = (rn == 31) ? 0 : regs[rn];
-            int64_t rm_val = (rm == 31) ? 0 : regs[rm];
-            if (rd != 31) regs[rd] = (take ? rn_val : rm_val) & 0xFFFFFFFF;
-        }
-        else if ((inst & 0xFFE00C00) == 0x1A800400) {
-            // CSINC 32-bit (rn/rm=31 → WZR; CSET when rn=rm=31)
-            uint8_t cc = (inst >> 12) & 0xF;
-            bool take = eval_condition(cc, flag_n, flag_z, flag_c, flag_v);
-            int64_t rn_val = (rn == 31) ? 0 : regs[rn];
-            int64_t rm_val = (rm == 31) ? 0 : regs[rm];
-            if (rd != 31) regs[rd] = (take ? rn_val : (rm_val + 1)) & 0xFFFFFFFF;
-        }
-        else if ((inst & 0xFFE00C00) == 0x5A800000) {
-            // CSINV 32-bit (rn/rm=31 → WZR)
-            uint8_t cc = (inst >> 12) & 0xF;
-            bool take = eval_condition(cc, flag_n, flag_z, flag_c, flag_v);
-            int64_t rn_val = (rn == 31) ? 0 : regs[rn];
-            int64_t rm_val = (rm == 31) ? 0 : regs[rm];
-            if (rd != 31) regs[rd] = (take ? rn_val : (~rm_val)) & 0xFFFFFFFF;
-        }
-        else if ((inst & 0xFFE00C00) == 0x5A800400) {
-            // CSNEG 32-bit (rn/rm=31 → WZR)
-            uint8_t cc = (inst >> 12) & 0xF;
-            bool take = eval_condition(cc, flag_n, flag_z, flag_c, flag_v);
-            int64_t rn_val = (rn == 31) ? 0 : regs[rn];
-            int64_t rm_val = (rm == 31) ? 0 : regs[rm];
-            if (rd != 31) regs[rd] = (take ? rn_val : (-rm_val)) & 0xFFFFFFFF;
-        }
-
-        // ════════════════════════════════════════════════════════════════════
-        // CONDITIONAL COMPARE (CCMP/CCMN)
-        // ════════════════════════════════════════════════════════════════════
-        else if ((inst & 0x3FE00410) == 0x3A400000) {
-            // CCMP (bit30=1): if cond then CMP(Rn, op2) else flags=nzcv
-            // CCMN (bit30=0): if cond then CMN(Rn, op2) else flags=nzcv
-            // bit 11: 0=register, 1=immediate
-            uint8_t cc = (inst >> 12) & 0xF;
-            uint8_t nzcv = inst & 0xF;
-            bool sf = (inst >> 31) & 1;
-            bool is_imm = (inst >> 11) & 1;
-            bool is_sub = (inst >> 30) & 1;  // 1=CCMP(sub), 0=CCMN(add)
-            bool take = eval_condition(cc, flag_n, flag_z, flag_c, flag_v);
-            if (take) {
+                // AND immediate 32-bit
+                int64_t bitmask = decode_bitmask_imm(inst);
                 int64_t rn_val = (rn == 31) ? 0 : regs[rn];
-                int64_t op2;
-                if (is_imm) {
-                    op2 = int64_t((inst >> 16) & 0x1F);
-                } else {
-                    op2 = (rm == 31) ? 0 : regs[rm];
-                }
-                if (sf) {
-                    int64_t result;
-                    if (is_sub) {
-                        result = rn_val - op2;
-                        flag_c = (uint64_t(rn_val) >= uint64_t(op2)) ? 1.0f : 0.0f;
-                        flag_v = ((rn_val ^ op2) & (rn_val ^ result) & (int64_t(1) << 63)) ? 1.0f : 0.0f;
-                    } else {
-                        result = rn_val + op2;
-                        flag_c = (uint64_t(result) < uint64_t(rn_val)) ? 1.0f : 0.0f;
-                        flag_v = ((rn_val ^ result) & ~(rn_val ^ op2) & (int64_t(1) << 63)) ? 1.0f : 0.0f;
-                    }
-                    flag_n = (result < 0) ? 1.0f : 0.0f;
-                    flag_z = (result == 0) ? 1.0f : 0.0f;
-                } else {
-                    uint32_t a32 = uint32_t(rn_val);
-                    uint32_t b32 = uint32_t(op2);
-                    uint32_t r32;
-                    if (is_sub) {
-                        r32 = a32 - b32;
-                        flag_c = (a32 >= b32) ? 1.0f : 0.0f;
-                        flag_v = ((a32 ^ b32) & (a32 ^ r32) & 0x80000000u) ? 1.0f : 0.0f;
-                    } else {
-                        r32 = a32 + b32;
-                        flag_c = (r32 < a32) ? 1.0f : 0.0f;
-                        flag_v = ((a32 ^ r32) & ~(a32 ^ b32) & 0x80000000u) ? 1.0f : 0.0f;
-                    }
-                    flag_n = ((r32 & 0x80000000u) != 0) ? 1.0f : 0.0f;
-                    flag_z = (r32 == 0) ? 1.0f : 0.0f;
-                }
-            } else {
-                flag_n = (nzcv & 8) ? 1.0f : 0.0f;
-                flag_z = (nzcv & 4) ? 1.0f : 0.0f;
-                flag_c = (nzcv & 2) ? 1.0f : 0.0f;
-                flag_v = (nzcv & 1) ? 1.0f : 0.0f;
+                if (rd != 31) regs[rd] = (rn_val & bitmask) & 0xFFFFFFFF;
             }
+            break;
         }
 
-        // ════════════════════════════════════════════════════════════════════
-        // MULTIPLY / MULTIPLY-ADD / MULTIPLY-SUBTRACT / MULTIPLY-HIGH
-        // ════════════════════════════════════════════════════════════════════
-        else if ((inst & 0xFFE0FC00) == 0x9BC07C00) {
-            // UMULH 64-bit: Rd = (unsigned(Rn) * unsigned(Rm)) >> 64
-            uint64_t a = uint64_t(regs[rn]);
-            uint64_t b = uint64_t(regs[rm]);
-            uint64_t a_lo = a & 0xFFFFFFFF;
-            uint64_t a_hi = a >> 32;
-            uint64_t b_lo = b & 0xFFFFFFFF;
-            uint64_t b_hi = b >> 32;
-            uint64_t p0 = a_lo * b_lo;
-            uint64_t p1 = a_lo * b_hi;
-            uint64_t p2 = a_hi * b_lo;
-            uint64_t p3 = a_hi * b_hi;
-            uint64_t carry = ((p0 >> 32) + (p1 & 0xFFFFFFFF) + (p2 & 0xFFFFFFFF)) >> 32;
-            uint64_t hi = p3 + (p1 >> 32) + (p2 >> 32) + carry;
-            if (rd != 31) regs[rd] = int64_t(hi);
-        }
-        // SMADDL: Xd = Xa + sign_extend(Wn) * sign_extend(Wm)
-        // SMULL when Ra=XZR
-        else if ((inst & 0xFFE08000) == 0x9B200000) {
-            int64_t nval = int64_t(int32_t(regs[rn] & 0xFFFFFFFF));
-            int64_t mval = int64_t(int32_t(regs[rm] & 0xFFFFFFFF));
-            int64_t ra_val = (ra == 31) ? 0 : regs[ra];
-            if (rd != 31) regs[rd] = ra_val + nval * mval;
-        }
-        // SMSUBL: Xd = Xa - sign_extend(Wn) * sign_extend(Wm)
-        else if ((inst & 0xFFE08000) == 0x9B208000) {
-            int64_t nval = int64_t(int32_t(regs[rn] & 0xFFFFFFFF));
-            int64_t mval = int64_t(int32_t(regs[rm] & 0xFFFFFFFF));
-            int64_t ra_val = (ra == 31) ? 0 : regs[ra];
-            if (rd != 31) regs[rd] = ra_val - nval * mval;
-        }
-        // SMULH: Xd = (signed Rn * signed Rm) >> 64
-        else if ((inst & 0xFFE0FC00) == 0x9B407C00) {
-            int64_t a = regs[rn];
-            int64_t b = regs[rm];
-            // Decompose into unsigned parts, adjust sign at end
-            uint64_t ua = uint64_t(a < 0 ? -a : a);
-            uint64_t ub = uint64_t(b < 0 ? -b : b);
-            uint64_t a_lo = ua & 0xFFFFFFFF, a_hi = ua >> 32;
-            uint64_t b_lo = ub & 0xFFFFFFFF, b_hi = ub >> 32;
-            uint64_t p0 = a_lo * b_lo;
-            uint64_t p1 = a_lo * b_hi;
-            uint64_t p2 = a_hi * b_lo;
-            uint64_t p3 = a_hi * b_hi;
-            uint64_t carry = ((p0 >> 32) + (p1 & 0xFFFFFFFF) + (p2 & 0xFFFFFFFF)) >> 32;
-            uint64_t hi = p3 + (p1 >> 32) + (p2 >> 32) + carry;
-            bool neg = (a < 0) != (b < 0);
-            if (neg) {
-                // Two's complement: if low product is 0, just negate hi; else negate and subtract borrow
-                uint64_t lo = p0 + (p1 << 32) + (p2 << 32);
-                hi = (lo == 0) ? (~hi + 1) : ~hi;
+        case 0x13: { // SBFM 32-bit
+            // SBFM 32-bit (also handles ASR_IMM 32-bit, SBFX 32-bit, SXTB, SXTH)
+            uint8_t immr = (inst >> 16) & 0x3F;
+            uint8_t imms = (inst >> 10) & 0x3F;
+            uint32_t val = uint32_t(regs[rn] & 0xFFFFFFFF);
+            uint32_t result;
+            if (imms >= immr) {
+                // SBFX / ASR 32-bit: extract (imms-immr+1) bits at immr, sign extend
+                uint8_t width = imms - immr + 1;
+                result = val >> immr;
+                uint32_t mask = (width < 32) ? ((uint32_t(1) << width) - 1) : 0xFFFFFFFF;
+                result &= mask;
+                // Sign extend from bit (width - 1) within 32-bit result
+                if (width < 32 && (result & (uint32_t(1) << (width - 1)))) {
+                    result |= ~mask;
+                }
+            } else {
+                // SBFIZ: extract (imms+1) low bits, sign-extend, shift left by (32-immr)
+                uint32_t width = imms + 1;
+                uint32_t lsb = 32 - immr;
+                uint32_t mask = (uint32_t(1) << width) - 1;
+                uint32_t src_bits = val & mask;
+                if (src_bits & (uint32_t(1) << (width - 1))) {
+                    src_bits |= ~mask;
+                }
+                result = src_bits << lsb;
             }
-            if (rd != 31) regs[rd] = int64_t(hi);
+            // 32-bit SBFM: zero-extend to 64 bits (sign is within 32-bit result)
+            if (rd != 31) regs[rd] = int64_t(uint64_t(result));
+            break;
         }
-        // UMADDL: Xd = Xa + zero_extend(Wn) * zero_extend(Wm)
-        // UMULL when Ra=XZR
-        else if ((inst & 0xFFE08000) == 0x9BA00000) {
-            uint64_t nval = uint64_t(regs[rn]) & 0xFFFFFFFF;
-            uint64_t mval = uint64_t(regs[rm]) & 0xFFFFFFFF;
-            int64_t ra_val = (ra == 31) ? 0 : regs[ra];
-            if (rd != 31) regs[rd] = int64_t(uint64_t(ra_val) + nval * mval);
+
+        case 0x14: case 0x15: case 0x16: case 0x17: { // B unconditional
+            // B - Unconditional branch
+            pc = uint64_t(int64_t(pc) + sign_extend_26(imm26) * 4);
+            branch_taken = true;
+            break;
         }
-        // UMSUBL: Xd = Xa - zero_extend(Wn) * zero_extend(Wm)
-        else if ((inst & 0xFFE08000) == 0x9BA08000) {
-            uint64_t nval = uint64_t(regs[rn]) & 0xFFFFFFFF;
-            uint64_t mval = uint64_t(regs[rm]) & 0xFFFFFFFF;
-            int64_t ra_val = (ra == 31) ? 0 : regs[ra];
-            if (rd != 31) regs[rd] = int64_t(uint64_t(ra_val) - nval * mval);
+
+        case 0x18: case 0x58: case 0x98: case 0xD8: { // PC-relative literal loads
+            if (op_byte != 0xD8 && rd != 31) {
+                int32_t offset = sign_extend_19(imm19) * 4;
+                uint64_t addr = uint64_t(int64_t(pc) + offset);
+                if (op_byte == 0x18) regs[rd] = int64_t(load32(memory_out, addr)) & 0xFFFFFFFF;
+                else if (op_byte == 0x58) regs[rd] = load64(memory_out, addr);
+                else regs[rd] = int64_t(int32_t(load32(memory_out, addr)));
+            }
+            break;
         }
-        else if ((inst & 0xFFE08000) == 0x9B008000) {
-            // MSUB 64-bit: Rd = Ra - Rn * Rm
-            int64_t ra_val = (ra == 31) ? 0 : regs[ra];
-            if (rd != 31) regs[rd] = ra_val - regs[rn] * regs[rm];
+
+        case 0x1A: { // Data processing 2-source 32-bit + CSEL/CSINC 32-bit
+            if ((inst & 0xFFE0FC00) == 0x1AC00800) {
+                // UDIV W — unsigned divide 32-bit
+                uint32_t divisor = uint32_t(regs[rm] & 0xFFFFFFFF);
+                if (divisor != 0) {
+                    if (rd != 31) regs[rd] = int64_t(uint32_t(regs[rn] & 0xFFFFFFFF) / divisor);
+                } else {
+                    if (rd != 31) regs[rd] = 0;
+                }
+            } else if ((inst & 0xFFE0FC00) == 0x1AC00C00) {
+                // SDIV W — signed divide 32-bit
+                int32_t dividend = int32_t(regs[rn] & 0xFFFFFFFF);
+                int32_t divisor = int32_t(regs[rm] & 0xFFFFFFFF);
+                if (divisor != 0) {
+                    if (rd != 31) regs[rd] = int64_t(uint32_t(dividend / divisor));
+                } else {
+                    if (rd != 31) regs[rd] = 0;
+                }
+            } else if ((inst & 0xFFE0FC00) == 0x1AC02000) {
+                // LSLV W — logical shift left by register 32-bit
+                uint32_t shift = uint32_t(regs[rm] & 0x1F);  // Mod 32
+                if (rd != 31) regs[rd] = int64_t((uint32_t(regs[rn] & 0xFFFFFFFF) << shift));
+            } else if ((inst & 0xFFE0FC00) == 0x1AC02400) {
+                // LSRV W — logical shift right by register 32-bit
+                uint32_t shift = uint32_t(regs[rm] & 0x1F);  // Mod 32
+                if (rd != 31) regs[rd] = int64_t(uint32_t(regs[rn] & 0xFFFFFFFF) >> shift);
+            } else if ((inst & 0xFFE0FC00) == 0x1AC02800) {
+                // ASRV W — arithmetic shift right by register 32-bit
+                int32_t val = int32_t(regs[rn] & 0xFFFFFFFF);
+                uint32_t shift = uint32_t(regs[rm] & 0x1F);  // Mod 32
+                if (rd != 31) regs[rd] = int64_t(uint32_t(val >> shift));
+            } else if ((inst & 0xFFE0FC00) == 0x1AC02C00) {
+                // RORV W — rotate right by register 32-bit
+                uint32_t val = uint32_t(regs[rn] & 0xFFFFFFFF);
+                uint32_t shift = uint32_t(regs[rm] & 0x1F);  // Mod 32
+                if (shift > 0) {
+                    val = (val >> shift) | (val << (32 - shift));
+                }
+                if (rd != 31) regs[rd] = int64_t(val);
+            } else if ((inst & 0xFFE00C00) == 0x1A800000) {
+                // CSEL 32-bit (rn/rm=31 → WZR)
+                uint8_t cc = (inst >> 12) & 0xF;
+                bool take = eval_condition(cc, flag_n, flag_z, flag_c, flag_v);
+                int64_t rn_val = (rn == 31) ? 0 : regs[rn];
+                int64_t rm_val = (rm == 31) ? 0 : regs[rm];
+                if (rd != 31) regs[rd] = (take ? rn_val : rm_val) & 0xFFFFFFFF;
+            } else if ((inst & 0xFFE00C00) == 0x1A800400) {
+                // CSINC 32-bit (rn/rm=31 → WZR; CSET when rn=rm=31)
+                uint8_t cc = (inst >> 12) & 0xF;
+                bool take = eval_condition(cc, flag_n, flag_z, flag_c, flag_v);
+                int64_t rn_val = (rn == 31) ? 0 : regs[rn];
+                int64_t rm_val = (rm == 31) ? 0 : regs[rm];
+                if (rd != 31) regs[rd] = (take ? rn_val : (rm_val + 1)) & 0xFFFFFFFF;
+            }
+            break;
         }
-        else if ((inst & 0xFFE08000) == 0x9B000000) {
-            // MADD 64-bit: Rd = Ra + Rn * Rm (MUL when Ra=XZR)
-            int64_t ra_val = (ra == 31) ? 0 : regs[ra];
-            if (rd != 31) regs[rd] = ra_val + regs[rn] * regs[rm];
-        }
-        else if ((inst & 0xFFE08000) == 0x1B000000) {
+
+        case 0x1B: { // MADD 32-bit
             // MADD 32-bit
             int64_t ra_val = (ra == 31) ? 0 : regs[ra];
             int64_t result = (ra_val + regs[rn] * regs[rm]) & 0xFFFFFFFF;
             if (rd != 31) regs[rd] = result;
+            break;
         }
 
-        // ════════════════════════════════════════════════════════════════════
-        // ADD/SUB WITH EXTENSION
-        // ════════════════════════════════════════════════════════════════════
-        else if ((inst & 0xFFE00000) == 0x8B200000) {
-            // ADD extended register (rn=31 is SP, rd=31 writes SP)
-            uint8_t ext_type = (inst >> 13) & 0x7;
-            uint8_t shift = (inst >> 10) & 0x7;
-            int64_t val = apply_extension(regs[rm], ext_type);
-            val = (val << shift);
-            int64_t rn_val = regs[rn];
-            regs[rd] = rn_val + val;
-        }
-        else if ((inst & 0xFFE00000) == 0xAB200000) {
-            // ADDS extended register (64-bit, flag-setting)
-            // CMP with extended reg when Rd=XZR (e.g., CMP X1, W0, SXTW)
-            uint8_t ext_type = (inst >> 13) & 0x7;
-            uint8_t shift = (inst >> 10) & 0x7;
-            int64_t val = apply_extension(regs[rm], ext_type);
-            val = (val << shift);
-            int64_t rn_val = regs[rn];
-            int64_t result = rn_val + val;
-            if (rd != 31) regs[rd] = result;
-            flag_n = (result < 0) ? 1.0f : 0.0f;
-            flag_z = (result == 0) ? 1.0f : 0.0f;
-            flag_c = (uint64_t(result) < uint64_t(rn_val)) ? 1.0f : 0.0f;
-            flag_v = ((rn_val ^ result) & ~(rn_val ^ val) & (int64_t(1) << 63)) ? 1.0f : 0.0f;
-        }
-        else if ((inst & 0xFFE00000) == 0xCB200000) {
-            // SUB extended register (rn=31 is SP, rd=31 writes SP)
-            uint8_t ext_type = (inst >> 13) & 0x7;
-            uint8_t shift = (inst >> 10) & 0x7;
-            int64_t val = apply_extension(regs[rm], ext_type);
-            val = (val << shift);
-            int64_t rn_val = regs[rn];
-            regs[rd] = rn_val - val;
-        }
-        else if ((inst & 0xFFE00000) == 0xEB200000) {
-            // SUBS extended register (64-bit, flag-setting)
-            // CMP with extended reg when Rd=XZR (e.g., CMP X1, W0, SXTW)
-            uint8_t ext_type = (inst >> 13) & 0x7;
-            uint8_t shift = (inst >> 10) & 0x7;
-            int64_t val = apply_extension(regs[rm], ext_type);
-            val = (val << shift);
-            int64_t rn_val = regs[rn];
-            int64_t result = rn_val - val;
-            if (rd != 31) regs[rd] = result;
-            flag_n = (result < 0) ? 1.0f : 0.0f;
-            flag_z = (result == 0) ? 1.0f : 0.0f;
-            flag_c = (uint64_t(rn_val) >= uint64_t(val)) ? 1.0f : 0.0f;
-            flag_v = ((rn_val ^ val) & (rn_val ^ result) & (int64_t(1) << 63)) ? 1.0f : 0.0f;
-        }
-
-        // ════════════════════════════════════════════════════════════════════
-        // F8 COMPLEX: 64-bit LDR/STR with reg-offset / pre / post / unscaled
-        // ════════════════════════════════════════════════════════════════════
-        else if (op_byte == 0xF8) {
-            uint8_t opc_bit = (inst >> 22) & 0x1;  // 1=load, 0=store
-            uint8_t opt_bits = (inst >> 10) & 0x3;
-
-            if (opt_bits == 0x2) {
-                // Register offset: LDR/STR Xt, [Xn, Xm, LSL #shift]
-                uint8_t shift_bit = (inst >> 12) & 0x1;
-                int64_t base = regs[rn];  // rn=31 is SP
-                int64_t offset = ((rm == 31) ? 0 : regs[rm]) << (shift_bit ? 3 : 0);
-                uint64_t addr = uint64_t(base + offset);
-                if (opc_bit) {
-                    if (rd != 31) regs[rd] = load64(memory_out, addr);
-                } else {
-                    store64(memory_out, addr, RD_VAL);
-                }
-            } else if (opt_bits == 0x1) {
-                // Post-index: LDR/STR Xt, [Xn], #imm9
-                int32_t imm9 = sign_extend_9((inst >> 12) & 0x1FF);
+        case 0x28: { // LDP/STP post-index 32-bit
+            if ((inst & 0xFFC00000) == 0x28C00000) {
+                // LDP post-index 32-bit
+                int32_t imm7 = sign_extend_7((inst >> 15) & 0x7F) * 4;
                 int64_t base = regs[rn];  // rn=31 is SP
                 uint64_t addr = uint64_t(base);
-                if (opc_bit) {
-                    if (rd != 31) regs[rd] = load64(memory_out, addr);
-                } else {
-                    store64(memory_out, addr, RD_VAL);
-                }
-                regs[rn] = base + imm9;  // writeback (SP-capable)
-            } else if (opt_bits == 0x3) {
-                // Pre-index: LDR/STR Xt, [Xn, #imm9]!
-                int32_t imm9 = sign_extend_9((inst >> 12) & 0x1FF);
+                if (rd != 31) regs[rd] = int64_t(load32(memory_out, addr)) & 0xFFFFFFFF;
+                if (rt2 != 31) regs[rt2] = int64_t(load32(memory_out, addr + 4)) & 0xFFFFFFFF;
+                regs[rn] = base + imm7;  // writeback (SP-capable)
+            } else if ((inst & 0xFFC00000) == 0x28800000) {
+                // STP post-index 32-bit
+                int32_t imm7 = sign_extend_7((inst >> 15) & 0x7F) * 4;
                 int64_t base = regs[rn];  // rn=31 is SP
-                int64_t new_base = base + imm9;
-                regs[rn] = new_base;  // writeback (SP-capable)
-                uint64_t addr = uint64_t(new_base);
-                if (opc_bit) {
-                    if (rd != 31) regs[rd] = load64(memory_out, addr);
-                } else {
-                    store64(memory_out, addr, RD_VAL);
-                }
-            } else {
-                // Unscaled: LDUR/STUR
-                int32_t imm9 = sign_extend_9((inst >> 12) & 0x1FF);
-                int64_t base = regs[rn];  // rn=31 is SP
-                uint64_t addr = uint64_t(base + imm9);
-                if (opc_bit) {
-                    if (rd != 31) regs[rd] = load64(memory_out, addr);
-                } else {
-                    store64(memory_out, addr, RD_VAL);
-                }
+                uint64_t addr = uint64_t(base);
+                store32(memory_out, addr, int32_t(RD_VAL & 0xFFFFFFFF));
+                store32(memory_out, addr + 4, int32_t(RT2_VAL & 0xFFFFFFFF));
+                regs[rn] = base + imm7;  // writeback (SP-capable)
             }
+            break;
         }
 
-        // ════════════════════════════════════════════════════════════════════
-        // 38 COMPLEX: Byte LDR/STR with reg-offset / pre / post
-        // opc[23:22]: 00=STRB, 01=LDRB(zero-ext), 10=LDRSB(sign-ext 64), 11=LDRSB(sign-ext 32)
-        // ════════════════════════════════════════════════════════════════════
-        else if (op_byte == 0x38) {
+        case 0x29: { // LDP/STP 32-bit
+            if ((inst & 0xFFC00000) == 0x29C00000) {
+                // LDP pre-index 32-bit
+                int32_t imm7 = sign_extend_7((inst >> 15) & 0x7F) * 4;
+                int64_t base = regs[rn];  // rn=31 is SP
+                int64_t new_base = base + imm7;
+                uint64_t addr = uint64_t(new_base);
+                if (rd != 31) regs[rd] = int64_t(load32(memory_out, addr)) & 0xFFFFFFFF;
+                if (rt2 != 31) regs[rt2] = int64_t(load32(memory_out, addr + 4)) & 0xFFFFFFFF;
+                regs[rn] = new_base;  // writeback (SP-capable)
+            } else if ((inst & 0xFFC00000) == 0x29800000) {
+                // STP pre-index 32-bit
+                int32_t imm7 = sign_extend_7((inst >> 15) & 0x7F) * 4;
+                int64_t base = regs[rn];  // rn=31 is SP
+                int64_t new_base = base + imm7;
+                uint64_t addr = uint64_t(new_base);
+                store32(memory_out, addr, int32_t(RD_VAL & 0xFFFFFFFF));
+                store32(memory_out, addr + 4, int32_t(RT2_VAL & 0xFFFFFFFF));
+                regs[rn] = new_base;  // writeback (SP-capable)
+            } else if ((inst & 0xFFC00000) == 0x29400000) {
+                // LDP signed-offset 32-bit
+                int32_t imm7 = sign_extend_7((inst >> 15) & 0x7F) * 4;
+                int64_t base = regs[rn];  // rn=31 is SP
+                uint64_t addr = uint64_t(base + imm7);
+                if (rd != 31) regs[rd] = int64_t(load32(memory_out, addr)) & 0xFFFFFFFF;
+                if (rt2 != 31) regs[rt2] = int64_t(load32(memory_out, addr + 4)) & 0xFFFFFFFF;
+            } else if ((inst & 0xFFC00000) == 0x29000000) {
+                // STP signed-offset 32-bit
+                int32_t imm7 = sign_extend_7((inst >> 15) & 0x7F) * 4;
+                int64_t base = regs[rn];  // rn=31 is SP
+                uint64_t addr = uint64_t(base + imm7);
+                store32(memory_out, addr, int32_t(RD_VAL & 0xFFFFFFFF));
+                store32(memory_out, addr + 4, int32_t(RT2_VAL & 0xFFFFFFFF));
+            }
+            break;
+        }
+
+        case 0x2A: { // ORR register 32-bit
+            uint8_t stype = (inst >> 22) & 0x3;
+            uint8_t samt = (inst >> 10) & 0x3F;
+            int64_t rn_val = (rn == 31) ? 0 : regs[rn];
+            int64_t rm_val = (rm == 31) ? 0 : regs[rm];
+            if (stype == 0) rm_val = rm_val << samt;
+            else if (stype == 1) rm_val = int64_t(uint64_t(rm_val) >> samt);
+            else if (stype == 2) rm_val = rm_val >> samt;
+            else if (stype == 3) rm_val = int64_t((uint64_t(rm_val) >> samt) | (uint64_t(rm_val) << (32 - samt))) & 0xFFFFFFFF;
+            if (rd != 31) regs[rd] = (rn_val | rm_val) & 0xFFFFFFFF;
+            break;
+        }
+
+        case 0x31: { // ADDS immediate 32-bit
+            int64_t rn_val = regs[rn];
+            int64_t aimm = ((inst >> 22) & 1) ? (int64_t(imm12) << 12) : int64_t(imm12);
+            uint32_t a32 = uint32_t(rn_val);
+            uint32_t b32 = uint32_t(aimm);
+            uint32_t r32 = a32 + b32;
+            int64_t result = int64_t(r32);
+            if (rd != 31) regs[rd] = result;
+            flag_n = ((r32 & 0x80000000u) != 0) ? 1.0f : 0.0f;
+            flag_z = (r32 == 0) ? 1.0f : 0.0f;
+            flag_c = (r32 < a32) ? 1.0f : 0.0f;
+            flag_v = ((a32 ^ r32) & ~(a32 ^ b32) & 0x80000000u) ? 1.0f : 0.0f;
+            break;
+        }
+
+        case 0x32: { // ORR immediate 32-bit
+            int64_t bitmask = decode_bitmask_imm(inst);
+            int64_t rn_val = (rn == 31) ? 0 : regs[rn];
+            if (rd != 31) regs[rd] = (rn_val | bitmask) & 0xFFFFFFFF;
+            break;
+        }
+
+        case 0x33: { // BFM 32-bit
+            uint8_t immr = (inst >> 16) & 0x3F;
+            uint8_t imms = (inst >> 10) & 0x3F;
+            uint32_t src = uint32_t(regs[rn] & 0xFFFFFFFF);
+            uint32_t dst = (rd != 31) ? uint32_t(regs[rd] & 0xFFFFFFFF) : 0;
+            if (imms >= immr) {
+                // BFXIL: extract (imms-immr+1) bits at immr from src, insert at bit 0 of dst
+                uint8_t width = imms - immr + 1;
+                uint32_t extracted = (src >> immr);
+                uint32_t mask = (width < 32) ? ((uint32_t(1) << width) - 1) : 0xFFFFFFFF;
+                extracted &= mask;
+                dst = (dst & ~mask) | extracted;
+            } else {
+                // BFI: extract (imms+1) low bits of src, insert at bit (32-immr) of dst
+                uint8_t width = imms + 1;
+                uint8_t lsb = 32 - immr;
+                uint32_t extracted = src & ((uint32_t(1) << width) - 1);
+                uint32_t mask = ((uint32_t(1) << width) - 1) << lsb;
+                dst = (dst & ~mask) | (extracted << lsb);
+            }
+            if (rd != 31) regs[rd] = int64_t(dst);  // zero-extend to 64
+            break;
+        }
+
+        case 0x34: case 0xB4: { // CBZ
+            // CBZ
+            uint8_t rt = inst & 0x1F;
+            if (((rt == 31) ? 0 : regs[rt]) == 0) {
+                pc = uint64_t(int64_t(pc) + sign_extend_19(imm19) * 4);
+                branch_taken = true;
+            }
+            break;
+        }
+
+        case 0x35: case 0xB5: { // CBNZ
+            // CBNZ
+            uint8_t rt = inst & 0x1F;
+            if (((rt == 31) ? 0 : regs[rt]) != 0) {
+                pc = uint64_t(int64_t(pc) + sign_extend_19(imm19) * 4);
+                branch_taken = true;
+            }
+            break;
+        }
+
+        case 0x36: case 0xB6: { // TBZ
+            // TBZ - Test bit and branch if zero
+            uint8_t rt = inst & 0x1F;
+            uint8_t b5 = (inst >> 31) & 1;
+            uint8_t b40 = (inst >> 19) & 0x1F;
+            uint8_t bit_pos = (b5 << 5) | b40;
+            uint32_t imm14 = (inst >> 5) & 0x3FFF;
+            int64_t val = (rt == 31) ? 0 : regs[rt];
+            if (!(uint64_t(val) & (uint64_t(1) << bit_pos))) {
+                pc = uint64_t(int64_t(pc) + sign_extend_14(imm14) * 4);
+                branch_taken = true;
+            }
+            break;
+        }
+
+        case 0x37: case 0xB7: { // TBNZ
+            // TBNZ - Test bit and branch if not zero
+            uint8_t rt = inst & 0x1F;
+            uint8_t b5 = (inst >> 31) & 1;
+            uint8_t b40 = (inst >> 19) & 0x1F;
+            uint8_t bit_pos = (b5 << 5) | b40;
+            uint32_t imm14 = (inst >> 5) & 0x3FFF;
+            int64_t val = (rt == 31) ? 0 : regs[rt];
+            if (uint64_t(val) & (uint64_t(1) << bit_pos)) {
+                pc = uint64_t(int64_t(pc) + sign_extend_14(imm14) * 4);
+                branch_taken = true;
+            }
+            break;
+        }
+
+        case 0x38: { // Byte LDR/STR complex
             uint8_t opc = (inst >> 22) & 0x3;
             uint8_t opt_bits = (inst >> 10) & 0x3;
 
@@ -889,13 +754,754 @@ KERNEL_SOURCE_V2 = """
                     if (rd != 31) regs[rd] = int64_t(val8);
                 }
             }
+            break;
         }
 
-        // ════════════════════════════════════════════════════════════════════
-        // 78 COMPLEX: Halfword LDR/STR with unscaled / reg-offset / pre / post
-        // opc[23:22]: 00=STRH, 01=LDRH(zero-ext), 10=LDRSH(sign-ext 64), 11=LDRSH(sign-ext 32)
-        // ════════════════════════════════════════════════════════════════════
-        else if (op_byte == 0x78) {
+        case 0x39: { // LDRB/STRB/LDRSB unsigned offset
+            if ((inst & 0xFFC00000) == 0x39800000) {
+                // LDRSB - Load signed byte
+                int64_t base = regs[rn];  // rn=31 is SP
+                uint64_t addr = uint64_t(base) + imm12;
+                int64_t val = int64_t(memory_out[addr]);
+                if (val & 0x80) val |= int64_t(0xFFFFFFFFFFFFFF00);
+                if (rd != 31) regs[rd] = val;
+            } else if ((inst & 0xFFC00000) == 0x39400000) {
+                int64_t base = regs[rn];  // rn=31 is SP
+                uint64_t addr = uint64_t(base) + imm12;
+                if (rd != 31) regs[rd] = int64_t(memory_out[addr]);
+            } else if ((inst & 0xFFC00000) == 0x39000000) {
+                int64_t base = regs[rn];  // rn=31 is SP
+                uint64_t addr = uint64_t(base) + imm12;
+                memory_out[addr] = uint8_t(RD_VAL & 0xFF);
+            }
+            break;
+        }
+
+        case 0x3A: case 0x7A: case 0xBA: case 0xFA: { // CCMP/CCMN
+            if ((inst & 0x3FE00410) == 0x3A400000) {
+                // CCMP (bit30=1): if cond then CMP(Rn, op2) else flags=nzcv
+                // CCMN (bit30=0): if cond then CMN(Rn, op2) else flags=nzcv
+                // bit 11: 0=register, 1=immediate
+                uint8_t cc = (inst >> 12) & 0xF;
+                uint8_t nzcv = inst & 0xF;
+                bool sf = (inst >> 31) & 1;
+                bool is_imm = (inst >> 11) & 1;
+                bool is_sub = (inst >> 30) & 1;  // 1=CCMP(sub), 0=CCMN(add)
+                bool take = eval_condition(cc, flag_n, flag_z, flag_c, flag_v);
+                if (take) {
+                    int64_t rn_val = (rn == 31) ? 0 : regs[rn];
+                    int64_t op2;
+                    if (is_imm) {
+                        op2 = int64_t((inst >> 16) & 0x1F);
+                    } else {
+                        op2 = (rm == 31) ? 0 : regs[rm];
+                    }
+                    if (sf) {
+                        int64_t result;
+                        if (is_sub) {
+                            result = rn_val - op2;
+                            flag_c = (uint64_t(rn_val) >= uint64_t(op2)) ? 1.0f : 0.0f;
+                            flag_v = ((rn_val ^ op2) & (rn_val ^ result) & (int64_t(1) << 63)) ? 1.0f : 0.0f;
+                        } else {
+                            result = rn_val + op2;
+                            flag_c = (uint64_t(result) < uint64_t(rn_val)) ? 1.0f : 0.0f;
+                            flag_v = ((rn_val ^ result) & ~(rn_val ^ op2) & (int64_t(1) << 63)) ? 1.0f : 0.0f;
+                        }
+                        flag_n = (result < 0) ? 1.0f : 0.0f;
+                        flag_z = (result == 0) ? 1.0f : 0.0f;
+                    } else {
+                        uint32_t a32 = uint32_t(rn_val);
+                        uint32_t b32 = uint32_t(op2);
+                        uint32_t r32;
+                        if (is_sub) {
+                            r32 = a32 - b32;
+                            flag_c = (a32 >= b32) ? 1.0f : 0.0f;
+                            flag_v = ((a32 ^ b32) & (a32 ^ r32) & 0x80000000u) ? 1.0f : 0.0f;
+                        } else {
+                            r32 = a32 + b32;
+                            flag_c = (r32 < a32) ? 1.0f : 0.0f;
+                            flag_v = ((a32 ^ r32) & ~(a32 ^ b32) & 0x80000000u) ? 1.0f : 0.0f;
+                        }
+                        flag_n = ((r32 & 0x80000000u) != 0) ? 1.0f : 0.0f;
+                        flag_z = (r32 == 0) ? 1.0f : 0.0f;
+                    }
+                } else {
+                    flag_n = (nzcv & 8) ? 1.0f : 0.0f;
+                    flag_z = (nzcv & 4) ? 1.0f : 0.0f;
+                    flag_c = (nzcv & 2) ? 1.0f : 0.0f;
+                    flag_v = (nzcv & 1) ? 1.0f : 0.0f;
+                }
+            }
+            break;
+        }
+
+        case 0x3D: { // SIMD STR/LDR Q 128-bit unsigned offset
+            if ((inst & 0xFFC00000) == 0x3D800000) {
+                uint8_t rt = inst & 0x1F;
+                int64_t base = regs[rn];  // rn=31 is SP
+                uint64_t addr = uint64_t(base) + (imm12 * 16);
+                store64(memory_out, addr, vreg_lo[rt]);
+                store64(memory_out, addr + 8, vreg_hi[rt]);
+            } else if ((inst & 0xFFC00000) == 0x3DC00000) {
+                uint8_t rt = inst & 0x1F;
+                int64_t base = regs[rn];  // rn=31 is SP
+                uint64_t addr = uint64_t(base) + (imm12 * 16);
+                vreg_lo[rt] = load64(memory_out, addr);
+                vreg_hi[rt] = load64(memory_out, addr + 8);
+            }
+            break;
+        }
+
+        case 0x3C: { // SIMD/FP STUR/LDUR with unscaled offset
+            // Encoding: size=00 V=1 opc imm9 Rn Rt
+            uint8_t rt = inst & 0x1F;
+            uint8_t sopc = (inst >> 22) & 0x3;
+            int32_t simm9 = (inst >> 12) & 0x1FF;
+            if (simm9 & 0x100) simm9 -= 0x200;
+            int64_t base = (rn == 31) ? regs[31] : regs[rn];
+            uint64_t addr = uint64_t(int64_t(base) + simm9);
+            if (sopc == 0) {
+                // STUR B (8-bit store)
+                memory_out[addr] = uint8_t(vreg_lo[rt] & 0xFF);
+            } else if (sopc == 1) {
+                // LDUR B (8-bit load)
+                vreg_lo[rt] = int64_t(memory_out[addr]);
+                vreg_hi[rt] = 0;
+            } else if (sopc == 2) {
+                // STUR Q (128-bit store)
+                store64(memory_out, addr, vreg_lo[rt]);
+                store64(memory_out, addr + 8, vreg_hi[rt]);
+            } else if (sopc == 3) {
+                // LDUR Q (128-bit load)
+                vreg_lo[rt] = load64(memory_out, addr);
+                vreg_hi[rt] = load64(memory_out, addr + 8);
+            }
+            break;
+        }
+
+        case 0x0E: { // NEON 2-register misc / across-lanes (8B arrangement)
+            uint8_t rt = inst & 0x1F;
+            if ((inst & 0xFFFFFC00) == 0x0E205800) {
+                // CNT Vd.8B, Vn.8B — count set bits per byte
+                uint64_t val = uint64_t(vreg_lo[rn]);
+                uint64_t result = 0;
+                for (int b = 0; b < 8; b++) {
+                    uint8_t byte_val = (val >> (b * 8)) & 0xFF;
+                    uint8_t cnt = 0;
+                    while (byte_val) { cnt += byte_val & 1; byte_val >>= 1; }
+                    result |= (uint64_t(cnt) << (b * 8));
+                }
+                vreg_lo[rt] = int64_t(result);
+                vreg_hi[rt] = 0;
+            } else if ((inst & 0xFFFFFC00) == 0x0E31B800) {
+                // ADDV Bd, Vn.8B — horizontal add across vector bytes
+                uint64_t val = uint64_t(vreg_lo[rn]);
+                uint64_t sum = 0;
+                for (int b = 0; b < 8; b++) {
+                    sum += (val >> (b * 8)) & 0xFF;
+                }
+                vreg_lo[rt] = int64_t(sum & 0xFF);
+                vreg_hi[rt] = 0;
+            }
+            break;
+        }
+
+        case 0x1E: { // FP data processing / FMOV
+            uint8_t rt = inst & 0x1F;
+            if ((inst & 0xFFE0FC00) == 0x1E260000) {
+                // FMOV Wd, Sn — move bottom 32 bits of SIMD to GPR
+                uint32_t val = uint32_t(vreg_lo[rn] & 0xFFFFFFFF);
+                if (rt != 31) regs[rt] = int64_t(val);
+            } else if ((inst & 0xFFE0FC00) == 0x1E270000) {
+                // FMOV Sd, Wn — move GPR to bottom 32 bits of SIMD
+                int64_t val = (rn == 31) ? 0 : regs[rn];
+                vreg_lo[rt] = int64_t(uint32_t(val & 0xFFFFFFFF));
+                vreg_hi[rt] = 0;
+            } else if ((inst & 0xFFE0FC00) == 0x1E204000) {
+                // FMOV Sd, Sn — copy single-precision between FP registers
+                vreg_lo[rt] = vreg_lo[rn] & 0xFFFFFFFF;
+                vreg_hi[rt] = 0;
+            }
+            break;
+        }
+
+        case 0x9E: { // FP/INT transfer
+            uint8_t rt = inst & 0x1F;
+            if ((inst & 0xFFE0FC00) == 0x9E660000) {
+                // FMOV Dd, Xn — move GPR to SIMD D register
+                int64_t val = (rn == 31) ? 0 : regs[rn];
+                vreg_lo[rt] = val;
+                vreg_hi[rt] = 0;
+            } else if ((inst & 0xFFE0FC00) == 0x9E670000) {
+                // FMOV Xd, Dn — move SIMD D register to GPR
+                if (rt != 31) regs[rt] = vreg_lo[rn];
+            }
+            break;
+        }
+
+        case 0x2F: case 0x4F: { // MOVI SIMD vector immediate
+            // Used to zero vector registers: MOVI Vd.xS, #0
+            uint8_t rt = inst & 0x1F;
+            // For MOVI #0 patterns (0x2F00041D, 0x4F00041F), just zero the register
+            uint8_t cmode = (inst >> 12) & 0xF;
+            uint8_t op_bit = (inst >> 29) & 0x1;
+            uint8_t abc = ((inst >> 16) & 0x7) | (((inst >> 5) & 0x1F) << 3);
+            // Extract immediate
+            uint8_t a = (inst >> 18) & 1;
+            uint8_t bcdefgh = ((inst >> 16) & 0x7) | (((inst >> 5) & 0x1F) << 3);
+            uint8_t imm8_val = (a << 7) | (bcdefgh & 0x7F);
+            // For simplicity, handle the zero case (most common in musl)
+            if (imm8_val == 0 && cmode == 0) {
+                vreg_lo[rt] = 0;
+                vreg_hi[rt] = 0;
+            } else {
+                // General MOVI: replicate immediate based on cmode
+                // For now, handle as zero (conservative)
+                vreg_lo[rt] = 0;
+                vreg_hi[rt] = 0;
+            }
+            break;
+        }
+
+        case 0x4E: { // SIMD vector ops (16B/Q arrangement)
+            uint8_t rt = inst & 0x1F;
+            uint8_t imm5 = (inst >> 16) & 0x1F;
+            if ((inst & 0xBFE0FC00) == 0x0E000C00) {
+                // DUP Vd, Wn — broadcast GP register to vector lanes
+                int64_t val = (rn == 31) ? 0 : regs[rn];
+                if (imm5 & 1) {
+                    // DUP Vd.16B/8B, Wn — broadcast byte
+                    uint8_t byte_val = uint8_t(val & 0xFF);
+                    uint64_t fill = 0;
+                    for (int b = 0; b < 8; b++) fill |= (uint64_t(byte_val) << (b*8));
+                    vreg_lo[rt] = int64_t(fill);
+                    vreg_hi[rt] = ((inst >> 30) & 1) ? int64_t(fill) : 0;
+                } else if (imm5 & 2) {
+                    // DUP Vd.8H/4H, Wn — broadcast halfword
+                    uint16_t hw = uint16_t(val & 0xFFFF);
+                    uint64_t fill = 0;
+                    for (int b = 0; b < 4; b++) fill |= (uint64_t(hw) << (b*16));
+                    vreg_lo[rt] = int64_t(fill);
+                    vreg_hi[rt] = ((inst >> 30) & 1) ? int64_t(fill) : 0;
+                } else if (imm5 & 4) {
+                    // DUP Vd.4S/2S, Wn — broadcast word
+                    uint32_t w = uint32_t(val & 0xFFFFFFFF);
+                    uint64_t fill = (uint64_t(w) << 32) | uint64_t(w);
+                    vreg_lo[rt] = int64_t(fill);
+                    vreg_hi[rt] = ((inst >> 30) & 1) ? int64_t(fill) : 0;
+                } else if (imm5 & 8) {
+                    // DUP Vd.2D, Xn — broadcast doubleword
+                    vreg_lo[rt] = int64_t(val);
+                    vreg_hi[rt] = ((inst >> 30) & 1) ? int64_t(val) : 0;
+                }
+            } else if ((inst & 0xBFE0FC00) == 0x0E003C00) {
+                // UMOV Wd/Xd, Vn.Ts[idx] — extract element from vector to GP
+                uint8_t q = (inst >> 30) & 1;
+                uint64_t lo = uint64_t(vreg_lo[rn]);
+                uint64_t hi = uint64_t(vreg_hi[rn]);
+                if (imm5 & 8) {
+                    // UMOV Xd, Vn.D[idx] — 64-bit extract (Q must be 1)
+                    uint8_t idx_d = (imm5 >> 4) & 1;
+                    int64_t val = idx_d ? int64_t(hi) : int64_t(lo);
+                    if (rt != 31) regs[rt] = val;
+                } else if (imm5 & 4) {
+                    // UMOV Wd, Vn.S[idx] — 32-bit extract
+                    uint8_t idx_s = (imm5 >> 3) & 3;
+                    uint64_t src = (idx_s < 2) ? lo : hi;
+                    uint32_t val = uint32_t((src >> ((idx_s & 1) * 32)) & 0xFFFFFFFF);
+                    if (rt != 31) regs[rt] = int64_t(val);
+                } else if (imm5 & 2) {
+                    // UMOV Wd, Vn.H[idx] — 16-bit extract
+                    uint8_t idx_h = (imm5 >> 2) & 7;
+                    uint64_t src = (idx_h < 4) ? lo : hi;
+                    uint16_t val = uint16_t((src >> ((idx_h & 3) * 16)) & 0xFFFF);
+                    if (rt != 31) regs[rt] = int64_t(val);
+                } else {
+                    // UMOV Wd, Vn.B[idx] — 8-bit extract
+                    uint8_t idx_b = (imm5 >> 1) & 0xF;
+                    uint64_t src = (idx_b < 8) ? lo : hi;
+                    uint8_t val = uint8_t((src >> ((idx_b & 7) * 8)) & 0xFF);
+                    if (rt != 31) regs[rt] = int64_t(val);
+                }
+            } else if ((inst & 0xBFE07C00) == 0x0E001C00) {
+                // INS Vd.Ts[idx], Wn — insert GP into vector element
+                int64_t val = (rn == 31) ? 0 : regs[rn];
+                if (imm5 & 4) {
+                    // INS Vd.S[idx], Wn — 32-bit insert
+                    uint8_t idx_s = (imm5 >> 3) & 3;
+                    uint32_t w = uint32_t(val & 0xFFFFFFFF);
+                    if (idx_s < 2) {
+                        uint64_t mask = ~(uint64_t(0xFFFFFFFF) << ((idx_s & 1) * 32));
+                        vreg_lo[rt] = int64_t((uint64_t(vreg_lo[rt]) & mask) | (uint64_t(w) << ((idx_s & 1) * 32)));
+                    } else {
+                        uint64_t mask = ~(uint64_t(0xFFFFFFFF) << ((idx_s & 1) * 32));
+                        vreg_hi[rt] = int64_t((uint64_t(vreg_hi[rt]) & mask) | (uint64_t(w) << ((idx_s & 1) * 32)));
+                    }
+                }
+            } else if ((inst & 0xFFE0FC00) == 0x4EA01C00) {
+                // ORR Vd.16B, Vn.16B, Vm.16B (also MOV when Vm==Vn)
+                vreg_lo[rt] = vreg_lo[rn] | vreg_lo[rm];
+                vreg_hi[rt] = vreg_hi[rn] | vreg_hi[rm];
+            } else if ((inst & 0xFFE0FC00) == 0x4E201C00) {
+                // AND Vd.16B, Vn.16B, Vm.16B
+                vreg_lo[rt] = vreg_lo[rn] & vreg_lo[rm];
+                vreg_hi[rt] = vreg_hi[rn] & vreg_hi[rm];
+            } else if ((inst & 0xFFE0FC00) == 0x4E601C00) {
+                // BIC Vd.16B, Vn.16B, Vm.16B (bit clear = AND NOT)
+                vreg_lo[rt] = vreg_lo[rn] & ~vreg_lo[rm];
+                vreg_hi[rt] = vreg_hi[rn] & ~vreg_hi[rm];
+            } else if ((inst & 0xFF20FC00) == 0x4E208400) {
+                // SUB Vd.16B, Vn.16B, Vm.16B
+                uint64_t lo_a = uint64_t(vreg_lo[rn]), lo_b = uint64_t(vreg_lo[rm]);
+                uint64_t hi_a = uint64_t(vreg_hi[rn]), hi_b = uint64_t(vreg_hi[rm]);
+                uint64_t lo_r = 0, hi_r = 0;
+                for (int b = 0; b < 8; b++) {
+                    uint8_t va = (lo_a >> (b*8)) & 0xFF;
+                    uint8_t vb = (lo_b >> (b*8)) & 0xFF;
+                    lo_r |= (uint64_t((va - vb) & 0xFF) << (b*8));
+                }
+                for (int b = 0; b < 8; b++) {
+                    uint8_t va = (hi_a >> (b*8)) & 0xFF;
+                    uint8_t vb = (hi_b >> (b*8)) & 0xFF;
+                    hi_r |= (uint64_t((va - vb) & 0xFF) << (b*8));
+                }
+                vreg_lo[rt] = int64_t(lo_r);
+                vreg_hi[rt] = int64_t(hi_r);
+            } else if ((inst & 0xFFFFFC00) == 0x4E201800) {
+                // REV16 Vd.16B, Vn.16B — reverse bytes in each 16-bit element
+                uint64_t lo = uint64_t(vreg_lo[rn]), hi = uint64_t(vreg_hi[rn]);
+                uint64_t lo_r = 0, hi_r = 0;
+                for (int i = 0; i < 4; i++) {
+                    uint16_t hw = (lo >> (i*16)) & 0xFFFF;
+                    hw = (hw >> 8) | ((hw & 0xFF) << 8);
+                    lo_r |= (uint64_t(hw) << (i*16));
+                }
+                for (int i = 0; i < 4; i++) {
+                    uint16_t hw = (hi >> (i*16)) & 0xFFFF;
+                    hw = (hw >> 8) | ((hw & 0xFF) << 8);
+                    hi_r |= (uint64_t(hw) << (i*16));
+                }
+                vreg_lo[rt] = int64_t(lo_r);
+                vreg_hi[rt] = int64_t(hi_r);
+            }
+            break;
+        }
+
+        case 0x6E: { // SIMD vector ops (16B) — extended
+            uint8_t rt = inst & 0x1F;
+            if ((inst & 0xFF20FC00) == 0x6E208400) {
+                // SUB Vd.16B, Vn.16B, Vm.16B (U=1 variant)
+                uint64_t lo_a = uint64_t(vreg_lo[rn]), lo_b = uint64_t(vreg_lo[rm]);
+                uint64_t hi_a = uint64_t(vreg_hi[rn]), hi_b = uint64_t(vreg_hi[rm]);
+                uint64_t lo_r = 0, hi_r = 0;
+                for (int b = 0; b < 8; b++) {
+                    uint8_t va = (lo_a >> (b*8)) & 0xFF;
+                    uint8_t vb = (lo_b >> (b*8)) & 0xFF;
+                    lo_r |= (uint64_t((va - vb) & 0xFF) << (b*8));
+                }
+                for (int b = 0; b < 8; b++) {
+                    uint8_t va = (hi_a >> (b*8)) & 0xFF;
+                    uint8_t vb = (hi_b >> (b*8)) & 0xFF;
+                    hi_r |= (uint64_t((va - vb) & 0xFF) << (b*8));
+                }
+                vreg_lo[rt] = int64_t(lo_r);
+                vreg_hi[rt] = int64_t(hi_r);
+            } else if ((inst & 0xFFE0FC00) == 0x6EE08400) {
+                // SUB Vd.2D, Vn.2D, Vm.2D — 64-bit lane subtraction
+                vreg_lo[rt] = vreg_lo[rn] - vreg_lo[rm];
+                vreg_hi[rt] = vreg_hi[rn] - vreg_hi[rm];
+            }
+            break;
+        }
+
+        case 0x6F: { // MOVI V.2D / MVNI V.4S
+            uint8_t rt = inst & 0x1F;
+            uint8_t cmode = (inst >> 12) & 0xF;
+            uint8_t op_bit = (inst >> 29) & 0x1;
+            if (cmode == 0xE && op_bit == 1) {
+                // MOVI Vd.2D, #0 (or MOVI Vd.2D, #imm)
+                // Extract imm8
+                uint8_t a = (inst >> 18) & 1;
+                uint8_t b_val = (inst >> 17) & 1;
+                uint8_t c = (inst >> 16) & 1;
+                uint8_t d = (inst >> 9) & 1;
+                uint8_t e = (inst >> 8) & 1;
+                uint8_t f = (inst >> 7) & 1;
+                uint8_t g = (inst >> 6) & 1;
+                uint8_t h = (inst >> 5) & 1;
+                uint8_t imm8 = (a<<7)|(b_val<<6)|(c<<5)|(d<<4)|(e<<3)|(f<<2)|(g<<1)|h;
+                // Expand: each bit of imm8 -> a full byte (0xFF or 0x00)
+                uint64_t val = 0;
+                for (int i = 0; i < 8; i++) {
+                    if (imm8 & (1 << i)) val |= (uint64_t(0xFF) << (i*8));
+                }
+                vreg_lo[rt] = int64_t(val);
+                vreg_hi[rt] = int64_t(val);
+            } else {
+                // MVNI or other — just zero for safety
+                vreg_lo[rt] = 0;
+                vreg_hi[rt] = 0;
+            }
+            break;
+        }
+
+        case 0x0F: { // SIMD shift by immediate / MOVI (8B arrangement)
+            uint8_t rt = inst & 0x1F;
+            // For SXTL-like and MOVI V.2S cases, handle conservatively
+            vreg_lo[rt] = 0;
+            vreg_hi[rt] = 0;
+            break;
+        }
+
+        case 0x2E: { // SIMD misc (8B arrangement)
+            uint8_t rt = inst & 0x1F;
+            if ((inst & 0xFFFFFC00) == 0x2E205800) {
+                // MVN Vd.8B, Vn.8B (NOT)
+                vreg_lo[rt] = ~vreg_lo[rn];
+                vreg_hi[rt] = 0;  // 8B = only lower 8 bytes
+            } else if ((inst & 0xFFFFFC00) == 0x2E200800) {
+                // REV32 Vd.8B, Vn.8B — reverse bytes in 32-bit elements
+                uint64_t lo = uint64_t(vreg_lo[rn]);
+                uint64_t lo_r = 0;
+                for (int i = 0; i < 2; i++) {
+                    uint32_t w = (lo >> (i*32)) & 0xFFFFFFFF;
+                    w = ((w & 0xFF000000) >> 24) | ((w & 0x00FF0000) >> 8) |
+                        ((w & 0x0000FF00) << 8) | ((w & 0x000000FF) << 24);
+                    lo_r |= (uint64_t(w) << (i*32));
+                }
+                vreg_lo[rt] = int64_t(lo_r);
+                vreg_hi[rt] = 0;
+            }
+            break;
+        }
+
+        case 0x69: { // LDPSW — load pair signed word
+            uint8_t rt = inst & 0x1F;
+            uint8_t rt2_v = (inst >> 10) & 0x1F;
+            int32_t imm7 = (inst >> 15) & 0x7F;
+            if (imm7 & 0x40) imm7 -= 0x80;
+            int64_t base = (rn == 31) ? regs[31] : regs[rn];
+            uint64_t addr = uint64_t(base + imm7 * 4);
+            int32_t val1 = int32_t(load32(memory_out, addr));
+            int32_t val2 = int32_t(load32(memory_out, addr + 4));
+            if (rt != 31) regs[rt] = int64_t(val1);   // sign-extended
+            if (rt2_v != 31) regs[rt2_v] = int64_t(val2);
+            break;
+        }
+
+        case 0x4C: { // SIMD LD1/ST1 multi-structure
+            // LD1/ST1 {Vt.16B}, [Xn] and similar
+            uint8_t rt = inst & 0x1F;
+            uint8_t L = (inst >> 22) & 1;
+            uint8_t opcode_field = (inst >> 12) & 0xF;
+            int64_t base = (rn == 31) ? regs[31] : regs[rn];
+            uint64_t addr = uint64_t(base);
+            if (L) {
+                // LD1 — load from memory to SIMD register(s)
+                if (opcode_field == 0x7) {
+                    // LD1 {Vt.16B}, [Xn] — single register
+                    vreg_lo[rt] = load64(memory_out, addr);
+                    vreg_hi[rt] = load64(memory_out, addr + 8);
+                } else if (opcode_field == 0xA) {
+                    // LD1 {Vt.16B, Vt2.16B}, [Xn] — two registers
+                    uint8_t rt2 = (rt + 1) & 31;
+                    vreg_lo[rt] = load64(memory_out, addr);
+                    vreg_hi[rt] = load64(memory_out, addr + 8);
+                    vreg_lo[rt2] = load64(memory_out, addr + 16);
+                    vreg_hi[rt2] = load64(memory_out, addr + 24);
+                }
+            } else {
+                // ST1 — store from SIMD register(s) to memory
+                if (opcode_field == 0x7) {
+                    // ST1 {Vt.16B}, [Xn]
+                    store64(memory_out, addr, vreg_lo[rt]);
+                    store64(memory_out, addr + 8, vreg_hi[rt]);
+                } else if (opcode_field == 0xA) {
+                    // ST1 {Vt.16B, Vt2.16B}, [Xn]
+                    uint8_t rt2 = (rt + 1) & 31;
+                    store64(memory_out, addr, vreg_lo[rt]);
+                    store64(memory_out, addr + 8, vreg_hi[rt]);
+                    store64(memory_out, addr + 16, vreg_lo[rt2]);
+                    store64(memory_out, addr + 24, vreg_hi[rt2]);
+                }
+            }
+            break;
+        }
+
+        case 0x7C: case 0xBC: case 0xFC: { // SIMD/FP STR/LDR H/S/D with complex addressing
+            // 0x7C = halfword (16-bit), 0xBC = single (32-bit), 0xFC = double (64-bit)
+            uint8_t rt = inst & 0x1F;
+            uint8_t sopc = (inst >> 22) & 0x3;
+            int32_t simm9 = (inst >> 12) & 0x1FF;
+            if (simm9 & 0x100) simm9 -= 0x200;
+            int64_t base = (rn == 31) ? regs[31] : regs[rn];
+            uint8_t idx_type = (inst >> 10) & 0x3; // 00=unscaled, 01=post, 11=pre
+            uint64_t addr;
+            if (idx_type == 1) {
+                // Post-index
+                addr = uint64_t(base);
+                if (rn == 31) regs[31] = base + simm9;
+                else regs[rn] = base + simm9;
+            } else if (idx_type == 3) {
+                // Pre-index
+                addr = uint64_t(int64_t(base) + simm9);
+                if (rn == 31) regs[31] = int64_t(addr);
+                else regs[rn] = int64_t(addr);
+            } else {
+                // Unscaled offset
+                addr = uint64_t(int64_t(base) + simm9);
+            }
+            if (op_byte == 0xFC) {
+                // 64-bit (D register)
+                if (sopc == 0 || sopc == 2) {
+                    store64(memory_out, addr, vreg_lo[rt]);
+                } else {
+                    vreg_lo[rt] = load64(memory_out, addr);
+                    vreg_hi[rt] = 0;
+                }
+            } else if (op_byte == 0xBC) {
+                // 32-bit (S register)
+                if (sopc == 0 || sopc == 2) {
+                    store32(memory_out, addr, int32_t(vreg_lo[rt] & 0xFFFFFFFF));
+                } else {
+                    vreg_lo[rt] = int64_t(uint32_t(load32(memory_out, addr)));
+                    vreg_hi[rt] = 0;
+                }
+            } else {
+                // 16-bit (H register)
+                if (sopc == 0 || sopc == 2) {
+                    store16(memory_out, addr, vreg_lo[rt] & 0xFFFF);
+                } else {
+                    vreg_lo[rt] = load16(memory_out, addr) & 0xFFFF;
+                    vreg_hi[rt] = 0;
+                }
+            }
+            break;
+        }
+
+        case 0x4A: { // EOR register 32-bit
+            uint8_t stype = (inst >> 22) & 0x3;
+            uint8_t samt = (inst >> 10) & 0x3F;
+            int64_t rn_val = (rn == 31) ? 0 : regs[rn];
+            int64_t rm_val = (rm == 31) ? 0 : regs[rm];
+            if (stype == 0) rm_val = rm_val << samt;
+            else if (stype == 1) rm_val = int64_t(uint64_t(rm_val) >> samt);
+            else if (stype == 2) rm_val = rm_val >> samt;
+            else if (stype == 3) rm_val = int64_t((uint64_t(rm_val) >> samt) | (uint64_t(rm_val) << (32 - samt))) & 0xFFFFFFFF;
+            if (rd != 31) regs[rd] = (rn_val ^ rm_val) & 0xFFFFFFFF;
+            break;
+        }
+
+        case 0x4B: { // SUB register 32-bit
+            uint8_t stype = (inst >> 22) & 0x3;
+            uint8_t samt = (inst >> 10) & 0x3F;
+            int64_t rn_val = (rn == 31) ? 0 : regs[rn];
+            int64_t rm_val = (rm == 31) ? 0 : regs[rm];
+            if (stype == 0) rm_val = rm_val << samt;
+            else if (stype == 1) rm_val = int64_t(uint64_t(rm_val) >> samt);
+            else if (stype == 2) rm_val = rm_val >> samt;
+            if (rd != 31) regs[rd] = (rn_val - rm_val) & 0xFFFFFFFF;
+            break;
+        }
+
+        case 0x51: { // SUB immediate 32-bit
+            int64_t rn_val = regs[rn];
+            int64_t aimm = ((inst >> 22) & 1) ? (int64_t(imm12) << 12) : int64_t(imm12);
+            regs[rd] = (rn_val - aimm) & 0xFFFFFFFF;
+            break;
+        }
+
+        case 0x52: { // MOVZ 32-bit / EOR immediate 32-bit
+            if ((inst >> 23) & 1) {
+                // MOVZ 32-bit
+                if (rd != 31) regs[rd] = (int64_t(imm16) << (hw * 16)) & 0xFFFFFFFF;
+            } else {
+                // EOR immediate 32-bit
+                int64_t bitmask = decode_bitmask_imm(inst);
+                int64_t rn_val = (rn == 31) ? 0 : regs[rn];
+                if (rd != 31) regs[rd] = (rn_val ^ bitmask) & 0xFFFFFFFF;
+            }
+            break;
+        }
+
+        case 0x53: { // UBFM 32-bit
+            // UBFM 32-bit
+            uint8_t immr = (inst >> 16) & 0x3F;
+            uint8_t imms = (inst >> 10) & 0x3F;
+            uint32_t val = uint32_t(regs[rn] & 0xFFFFFFFF);
+            uint32_t result;
+            if (imms >= immr) {
+                // UBFX 32-bit: extract (imms-immr+1) bits starting at immr
+                uint8_t width = imms - immr + 1;
+                result = val >> immr;
+                uint32_t mask = (width < 32) ? ((uint32_t(1) << width) - 1) : 0xFFFFFFFF;
+                result &= mask;
+            } else {
+                // UBFIZ / LSL: extract low (imms+1) bits, shift left by (32-immr)
+                uint32_t src_bits = val & ((uint32_t(1) << (imms + 1)) - 1);
+                result = src_bits << (32 - immr);
+            }
+            if (rd != 31) regs[rd] = int64_t(result);
+            break;
+        }
+
+        case 0x54: { // B.cond
+            // B.cond - Conditional branch
+            if (eval_condition(cond, flag_n, flag_z, flag_c, flag_v)) {
+                pc = uint64_t(int64_t(pc) + sign_extend_19(imm19) * 4);
+                branch_taken = true;
+            }
+            break;
+        }
+
+        case 0x5A: { // RBIT/CLZ/REV 32-bit + CSINV/CSNEG 32-bit
+            if ((inst & 0xFFFFFC00) == 0x5AC00000) {
+                // RBIT W - Reverse bits 32-bit
+                uint32_t val = uint32_t(regs[rn] & 0xFFFFFFFF);
+                uint32_t result = 0;
+                for (int i = 0; i < 32; i++) {
+                    if (val & (uint32_t(1) << i)) result |= uint32_t(1) << (31 - i);
+                }
+                if (rd != 31) regs[rd] = int64_t(result);
+            } else if ((inst & 0xFFFFFC00) == 0x5AC01000) {
+                // CLZ W - Count leading zeros 32-bit
+                uint32_t val = uint32_t(regs[rn] & 0xFFFFFFFF);
+                int64_t count = 32;
+                for (int i = 31; i >= 0; i--) {
+                    if (val & (uint32_t(1) << i)) { count = 31 - i; break; }
+                }
+                if (rd != 31) regs[rd] = count;
+            } else if ((inst & 0xFFFFFC00) == 0x5AC00800) {
+                // REV W - Reverse bytes 32-bit
+                uint32_t val = uint32_t(regs[rn] & 0xFFFFFFFF);
+                uint32_t result = ((val >> 24) & 0xFF) | ((val >> 8) & 0xFF00) |
+                                  ((val << 8) & 0xFF0000) | ((val << 24) & 0xFF000000u);
+                if (rd != 31) regs[rd] = int64_t(result);
+            } else if ((inst & 0xFFFFFC00) == 0x5AC00400) {
+                // REV16 W - Reverse bytes in 16-bit halfwords 32-bit
+                uint32_t val = uint32_t(regs[rn] & 0xFFFFFFFF);
+                uint32_t result = ((val >> 8) & 0x00FF00FF) | ((val << 8) & 0xFF00FF00u);
+                if (rd != 31) regs[rd] = int64_t(result);
+            } else if ((inst & 0xFFE00C00) == 0x5A800000) {
+                // CSINV 32-bit (rn/rm=31 → WZR)
+                uint8_t cc = (inst >> 12) & 0xF;
+                bool take = eval_condition(cc, flag_n, flag_z, flag_c, flag_v);
+                int64_t rn_val = (rn == 31) ? 0 : regs[rn];
+                int64_t rm_val = (rm == 31) ? 0 : regs[rm];
+                if (rd != 31) regs[rd] = (take ? rn_val : (~rm_val)) & 0xFFFFFFFF;
+            } else if ((inst & 0xFFE00C00) == 0x5A800400) {
+                // CSNEG 32-bit (rn/rm=31 → WZR)
+                uint8_t cc = (inst >> 12) & 0xF;
+                bool take = eval_condition(cc, flag_n, flag_z, flag_c, flag_v);
+                int64_t rn_val = (rn == 31) ? 0 : regs[rn];
+                int64_t rm_val = (rm == 31) ? 0 : regs[rm];
+                if (rd != 31) regs[rd] = (take ? rn_val : (-rm_val)) & 0xFFFFFFFF;
+            }
+            break;
+        }
+
+        case 0x6A: { // ANDS register 32-bit with shift
+            uint8_t stype = (inst >> 22) & 0x3;
+            uint8_t samt = (inst >> 10) & 0x3F;
+            int64_t rn_val = (rn == 31) ? 0 : regs[rn];
+            int64_t rm_val = (rm == 31) ? 0 : regs[rm];
+            if (op_byte == 0x6A) { rn_val &= 0xFFFFFFFF; rm_val &= 0xFFFFFFFF; }
+            if (stype == 0) rm_val = rm_val << samt;
+            else if (stype == 1) rm_val = int64_t(uint64_t(rm_val) >> samt);
+            else if (stype == 2) rm_val = (op_byte == 0x6A) ? int64_t(int32_t(rm_val) >> samt) : (rm_val >> samt);
+            int64_t result = rn_val & rm_val;
+            if (op_byte == 0x6A) result &= 0xFFFFFFFF;
+            if (rd != 31) regs[rd] = result;
+            if (op_byte == 0x6A) {
+                flag_n = (result & 0x80000000) ? 1.0f : 0.0f;
+            } else {
+                flag_n = (result < 0) ? 1.0f : 0.0f;
+            }
+            flag_z = (result == 0) ? 1.0f : 0.0f;
+            flag_c = 0.0f;
+            flag_v = 0.0f;
+            break;
+        }
+
+        case 0x6B: { // SUBS register 32-bit
+            uint8_t stype = (inst >> 22) & 0x3;
+            uint8_t samt = (inst >> 10) & 0x3F;
+            int64_t rn_val = (rn == 31) ? 0 : regs[rn];
+            int64_t rm_val = (rm == 31) ? 0 : regs[rm];
+            if (stype == 0) rm_val = rm_val << samt;
+            else if (stype == 1) rm_val = int64_t(uint64_t(rm_val) >> samt);
+            else if (stype == 2) rm_val = rm_val >> samt;
+            uint32_t a32 = uint32_t(rn_val);
+            uint32_t b32 = uint32_t(rm_val);
+            uint32_t r32 = a32 - b32;
+            int64_t result = int64_t(r32);
+            if (rd != 31) regs[rd] = result;
+            flag_n = ((r32 & 0x80000000u) != 0) ? 1.0f : 0.0f;
+            flag_z = (r32 == 0) ? 1.0f : 0.0f;
+            flag_c = (a32 >= b32) ? 1.0f : 0.0f;
+            flag_v = ((a32 ^ b32) & (a32 ^ r32) & 0x80000000u) ? 1.0f : 0.0f;
+            break;
+        }
+
+        case 0x6D: { // STP/LDP Dn FP pair
+            if ((inst & 0xFFC00000) == 0x6D000000) {
+                uint8_t rt = inst & 0x1F;
+                uint8_t rt2_v = (inst >> 10) & 0x1F;
+                int32_t offset = sign_extend_7((inst >> 15) & 0x7F) * 8;
+                int64_t base = regs[rn];
+                uint64_t addr = uint64_t(base + offset);
+                store64(memory_out, addr, vreg_lo[rt]);
+                store64(memory_out, addr + 8, vreg_lo[rt2_v]);
+            } else if ((inst & 0xFFC00000) == 0x6D400000) {
+                uint8_t rt = inst & 0x1F;
+                uint8_t rt2_v = (inst >> 10) & 0x1F;
+                int32_t offset = sign_extend_7((inst >> 15) & 0x7F) * 8;
+                int64_t base = regs[rn];
+                uint64_t addr = uint64_t(base + offset);
+                vreg_lo[rt] = load64(memory_out, addr);
+                vreg_hi[rt] = 0;
+                vreg_lo[rt2_v] = load64(memory_out, addr + 8);
+                vreg_hi[rt2_v] = 0;
+            }
+            break;
+        }
+
+        case 0x71: { // SUBS immediate 32-bit
+            int64_t rn_val = regs[rn];
+            int64_t aimm = ((inst >> 22) & 1) ? (int64_t(imm12) << 12) : int64_t(imm12);
+            uint32_t a32 = uint32_t(rn_val);
+            uint32_t b32 = uint32_t(aimm);
+            uint32_t r32 = a32 - b32;
+            int64_t result = int64_t(r32);
+            if (rd != 31) regs[rd] = result;
+            flag_n = ((r32 & 0x80000000u) != 0) ? 1.0f : 0.0f;
+            flag_z = (r32 == 0) ? 1.0f : 0.0f;
+            flag_c = (a32 >= b32) ? 1.0f : 0.0f;
+            flag_v = ((a32 ^ b32) & (a32 ^ r32) & 0x80000000u) ? 1.0f : 0.0f;
+            break;
+        }
+
+        case 0x72: { // MOVK 32-bit / ANDS immediate 32-bit
+            if ((inst >> 23) & 1) {
+                // MOVK 32-bit
+                int64_t mask = ~(int64_t(0xFFFF) << (hw * 16));
+                int64_t rd_val = (rd == 31) ? 0 : regs[rd];
+                if (rd != 31) regs[rd] = ((rd_val & mask) | (int64_t(imm16) << (hw * 16))) & 0xFFFFFFFF;
+            } else {
+                // ANDS immediate 32-bit
+                int64_t bitmask = decode_bitmask_imm(inst);
+                int64_t rn_val = (rn == 31) ? 0 : regs[rn];
+                int64_t result = (rn_val & bitmask) & 0xFFFFFFFF;
+                if (rd != 31) regs[rd] = result;
+                flag_n = ((result & 0x80000000) != 0) ? 1.0f : 0.0f;
+                flag_z = (result == 0) ? 1.0f : 0.0f;
+                flag_c = 0.0f;
+                flag_v = 0.0f;
+            }
+            break;
+        }
+
+        case 0x78: { // Halfword LDR/STR complex
             uint8_t opc = (inst >> 22) & 0x3;
             uint8_t opt_bits = (inst >> 10) & 0x3;
 
@@ -963,13 +1569,465 @@ KERNEL_SOURCE_V2 = """
                     if (rd != 31) regs[rd] = int64_t(val16);
                 }
             }
+            break;
         }
 
-        // ════════════════════════════════════════════════════════════════════
-        // B8 COMPLEX: 32-bit LDR/STR with unscaled / reg-offset / pre / post
-        // opc[23:22]: 00=STR, 01=LDR(zero-ext), 10=LDRSW(sign-ext to 64)
-        // ════════════════════════════════════════════════════════════════════
-        else if (op_byte == 0xB8) {
+        case 0x79: { // LDRH/STRH/LDRSH unsigned offset
+            if ((inst & 0xFFC00000) == 0x79400000) {
+                // LDRH - Load unsigned halfword
+                int64_t base = regs[rn];  // rn=31 is SP
+                uint64_t addr = uint64_t(base) + (imm12 * 2);
+                if (rd != 31) regs[rd] = load16(memory_out, addr);
+            } else if ((inst & 0xFFC00000) == 0x79000000) {
+                // STRH - Store halfword
+                int64_t base = regs[rn];  // rn=31 is SP
+                uint64_t addr = uint64_t(base) + (imm12 * 2);
+                store16(memory_out, addr, RD_VAL);
+            } else if ((inst & 0xFFC00000) == 0x79800000) {
+                // LDRSH - Load signed halfword
+                int64_t base = regs[rn];  // rn=31 is SP
+                uint64_t addr = uint64_t(base) + (imm12 * 2);
+                int64_t val = load16(memory_out, addr);
+                if (val & 0x8000) val |= int64_t(0xFFFFFFFFFFFF0000);
+                if (rd != 31) regs[rd] = val;
+            }
+            break;
+        }
+
+        case 0x8A: { // BIC / AND register 64-bit
+            if ((inst & 0xFFE00000) == 0x8A200000) {
+                // BIC - AND NOT: Xd = Xn & ~Xm
+                int64_t rn_val = (rn == 31) ? 0 : regs[rn];
+                int64_t rm_val = (rm == 31) ? 0 : regs[rm];
+                if (rd != 31) regs[rd] = rn_val & (~rm_val);
+            } else {
+                uint8_t stype = (inst >> 22) & 0x3;
+                uint8_t samt = (inst >> 10) & 0x3F;
+                int64_t rn_val = (rn == 31) ? 0 : regs[rn];
+                int64_t rm_val = (rm == 31) ? 0 : regs[rm];
+                if (stype == 0) rm_val = rm_val << samt;
+                else if (stype == 1) rm_val = int64_t(uint64_t(rm_val) >> samt);
+                else if (stype == 2) rm_val = rm_val >> samt;
+                else if (stype == 3) rm_val = int64_t((uint64_t(rm_val) >> samt) | (uint64_t(rm_val) << (64 - samt)));
+                if (rd != 31) regs[rd] = rn_val & rm_val;
+            }
+            break;
+        }
+
+        case 0x8B: { // ADD extended / ADD register 64-bit
+            if ((inst & 0xFFE00000) == 0x8B200000) {
+                // ADD extended register (rn=31 is SP, rd=31 writes SP)
+                uint8_t ext_type = (inst >> 13) & 0x7;
+                uint8_t shift = (inst >> 10) & 0x7;
+                int64_t val = apply_extension(regs[rm], ext_type);
+                val = (val << shift);
+                int64_t rn_val = regs[rn];
+                regs[rd] = rn_val + val;
+            } else {
+                uint8_t stype = (inst >> 22) & 0x3;
+                uint8_t samt = (inst >> 10) & 0x3F;
+                int64_t rn_val = (rn == 31) ? 0 : regs[rn];
+                int64_t rm_val = (rm == 31) ? 0 : regs[rm];
+                if (stype == 0) rm_val = rm_val << samt;
+                else if (stype == 1) rm_val = int64_t(uint64_t(rm_val) >> samt);
+                else if (stype == 2) rm_val = rm_val >> samt;
+                if (rd != 31) regs[rd] = rn_val + rm_val;
+            }
+            break;
+        }
+
+        case 0x90: case 0xB0: case 0xD0: case 0xF0: { // ADRP
+            // ADRP - PC-relative page address
+            uint32_t immlo = (inst >> 29) & 0x3;
+            uint32_t immhi = (inst >> 5) & 0x7FFFF;
+            int32_t offset = sign_extend_21((immhi << 2) | immlo);
+            int64_t page_base = int64_t(pc) & ~int64_t(0xFFF);
+            if (rd != 31) regs[rd] = page_base + (int64_t(offset) << 12);
+            break;
+        }
+
+        case 0x91: { // ADD immediate 64-bit
+            int64_t rn_val = regs[rn];
+            int64_t aimm = ((inst >> 22) & 1) ? (int64_t(imm12) << 12) : int64_t(imm12);
+            regs[rd] = rn_val + aimm;
+            break;
+        }
+
+        case 0x92: { // MOVN 64-bit / AND immediate 64-bit
+            if ((inst >> 23) & 1) {
+                // MOVN 64-bit
+                if (rd != 31) regs[rd] = ~(int64_t(imm16) << (hw * 16));
+            } else {
+                // AND immediate 64-bit
+                int64_t bitmask = decode_bitmask_imm(inst);
+                int64_t rn_val = (rn == 31) ? 0 : regs[rn];
+                if (rd != 31) regs[rd] = rn_val & bitmask;
+            }
+            break;
+        }
+
+        case 0x93: { // SXTW / SBFM 64-bit / EXTR
+            if ((inst & 0xFFFFFC00) == 0x93407C00) {
+                // SXTW - Sign extend 32-bit to 64-bit
+                int64_t val = regs[rn] & 0xFFFFFFFF;
+                if (val & 0x80000000) val |= int64_t(0xFFFFFFFF00000000);
+                if (rd != 31) regs[rd] = val;
+            } else if ((inst & 0xFFE00000) == 0x93C00000) {
+                uint64_t val_n = uint64_t(regs[rn]);
+                uint64_t val_m = uint64_t(regs[rm]);
+                uint8_t lsb = (inst >> 10) & 0x3F;
+                // Concatenate [Rn:Rm] and extract 64 bits starting at lsb
+                // result = (Rn:Rm >> lsb)[63:0]
+                uint64_t result;
+                if (lsb == 0) {
+                    result = val_m;
+                } else {
+                    result = (val_m >> lsb) | (val_n << (64 - lsb));
+                }
+                if (rd != 31) regs[rd] = int64_t(result);
+            } else {
+                // SBFM 64-bit (also handles ASR_IMM, SBFX, SXTB, SXTH, SXTW)
+                uint8_t immr = (inst >> 16) & 0x3F;
+                uint8_t imms = (inst >> 10) & 0x3F;
+                uint64_t val = uint64_t(regs[rn]);
+                uint64_t result;
+                if (imms >= immr) {
+                    // SBFX / ASR: extract (imms-immr+1) bits at immr, sign extend
+                    uint8_t width = imms - immr + 1;
+                    result = val >> immr;
+                    uint64_t mask = (width < 64) ? ((uint64_t(1) << width) - 1) : 0xFFFFFFFFFFFFFFFFULL;
+                    result &= mask;
+                    // Sign extend from bit (width - 1)
+                    if (width < 64 && (result & (uint64_t(1) << (width - 1)))) {
+                        result |= ~mask;
+                    }
+                } else {
+                    // SBFIZ: extract (imms+1) low bits, sign-extend, shift left by (64-immr)
+                    uint64_t width = imms + 1;
+                    uint64_t lsb = 64 - immr;
+                    uint64_t mask = (uint64_t(1) << width) - 1;
+                    uint64_t src_bits = val & mask;
+                    if (src_bits & (uint64_t(1) << (width - 1))) {
+                        src_bits |= ~mask;
+                    }
+                    result = src_bits << lsb;
+                }
+                if (rd != 31) regs[rd] = int64_t(result);
+            }
+            break;
+        }
+
+        case 0x94: case 0x95: case 0x96: case 0x97: { // BL
+            // BL - Branch with link
+            regs[30] = int64_t(pc + 4);
+            pc = uint64_t(int64_t(pc) + sign_extend_26(imm26) * 4);
+            branch_taken = true;
+            break;
+        }
+
+        case 0x9A: { // Shift registers / Division / CSEL / CSINC 64-bit
+            if ((inst & 0xFFE0FC00) == 0x9AC02000) {
+                // LSL register
+                int64_t shift = regs[rm] & 63;
+                if (rd != 31) regs[rd] = regs[rn] << shift;
+            } else if ((inst & 0xFFE0FC00) == 0x9AC02400) {
+                // LSR register (logical, unsigned)
+                uint64_t val = uint64_t(regs[rn]);
+                int64_t shift = regs[rm] & 63;
+                if (rd != 31) regs[rd] = int64_t(val >> shift);
+            } else if ((inst & 0xFFE0FC00) == 0x9AC02800) {
+                // ASR register (arithmetic, signed)
+                int64_t shift = regs[rm] & 63;
+                if (rd != 31) regs[rd] = regs[rn] >> shift;
+            } else if ((inst & 0xFFE0FC00) == 0x9AC02C00) {
+                // ROR register
+                uint64_t val = uint64_t(regs[rn]);
+                int64_t shift = regs[rm] & 63;
+                if (shift > 0) {
+                    val = (val >> shift) | (val << (64 - shift));
+                }
+                if (rd != 31) regs[rd] = int64_t(val);
+            } else if ((inst & 0xFFE0FC00) == 0x9AC00C00) {
+                // SDIV - Signed division
+                int64_t divisor = regs[rm];
+                if (divisor != 0) {
+                    if (rd != 31) regs[rd] = regs[rn] / divisor;
+                } else {
+                    if (rd != 31) regs[rd] = 0;
+                }
+            } else if ((inst & 0xFFE0FC00) == 0x9AC00800) {
+                // UDIV - Unsigned division
+                uint64_t divisor = uint64_t(regs[rm]);
+                if (divisor != 0) {
+                    if (rd != 31) regs[rd] = int64_t(uint64_t(regs[rn]) / divisor);
+                } else {
+                    if (rd != 31) regs[rd] = 0;
+                }
+            } else if ((inst & 0xFFE00C00) == 0x9A800000) {
+                // CSEL 64-bit: Rd = cond ? Rn : Rm (rn/rm=31 → XZR)
+                uint8_t cc = (inst >> 12) & 0xF;
+                bool take = eval_condition(cc, flag_n, flag_z, flag_c, flag_v);
+                int64_t rn_val = (rn == 31) ? 0 : regs[rn];
+                int64_t rm_val = (rm == 31) ? 0 : regs[rm];
+                if (rd != 31) regs[rd] = take ? rn_val : rm_val;
+            } else if ((inst & 0xFFE00C00) == 0x9A800400) {
+                // CSINC 64-bit: Rd = cond ? Rn : Rm+1 (rn/rm=31 → XZR; CSET when rn=rm=31)
+                uint8_t cc = (inst >> 12) & 0xF;
+                bool take = eval_condition(cc, flag_n, flag_z, flag_c, flag_v);
+                int64_t rn_val = (rn == 31) ? 0 : regs[rn];
+                int64_t rm_val = (rm == 31) ? 0 : regs[rm];
+                if (rd != 31) regs[rd] = take ? rn_val : (rm_val + 1);
+            }
+            break;
+        }
+
+        case 0x9B: { // Multiply variants
+            if ((inst & 0xFFE0FC00) == 0x9BC07C00) {
+                // UMULH 64-bit: Rd = (unsigned(Rn) * unsigned(Rm)) >> 64
+                uint64_t a = uint64_t(regs[rn]);
+                uint64_t b = uint64_t(regs[rm]);
+                uint64_t a_lo = a & 0xFFFFFFFF;
+                uint64_t a_hi = a >> 32;
+                uint64_t b_lo = b & 0xFFFFFFFF;
+                uint64_t b_hi = b >> 32;
+                uint64_t p0 = a_lo * b_lo;
+                uint64_t p1 = a_lo * b_hi;
+                uint64_t p2 = a_hi * b_lo;
+                uint64_t p3 = a_hi * b_hi;
+                uint64_t carry = ((p0 >> 32) + (p1 & 0xFFFFFFFF) + (p2 & 0xFFFFFFFF)) >> 32;
+                uint64_t hi = p3 + (p1 >> 32) + (p2 >> 32) + carry;
+                if (rd != 31) regs[rd] = int64_t(hi);
+            } else if ((inst & 0xFFE0FC00) == 0x9B407C00) {
+                int64_t a = regs[rn];
+                int64_t b = regs[rm];
+                // Decompose into unsigned parts, adjust sign at end
+                uint64_t ua = uint64_t(a < 0 ? -a : a);
+                uint64_t ub = uint64_t(b < 0 ? -b : b);
+                uint64_t a_lo = ua & 0xFFFFFFFF, a_hi = ua >> 32;
+                uint64_t b_lo = ub & 0xFFFFFFFF, b_hi = ub >> 32;
+                uint64_t p0 = a_lo * b_lo;
+                uint64_t p1 = a_lo * b_hi;
+                uint64_t p2 = a_hi * b_lo;
+                uint64_t p3 = a_hi * b_hi;
+                uint64_t carry = ((p0 >> 32) + (p1 & 0xFFFFFFFF) + (p2 & 0xFFFFFFFF)) >> 32;
+                uint64_t hi = p3 + (p1 >> 32) + (p2 >> 32) + carry;
+                bool neg = (a < 0) != (b < 0);
+                if (neg) {
+                    // Two's complement: if low product is 0, just negate hi; else negate and subtract borrow
+                    uint64_t lo = p0 + (p1 << 32) + (p2 << 32);
+                    hi = (lo == 0) ? (~hi + 1) : ~hi;
+                }
+                if (rd != 31) regs[rd] = int64_t(hi);
+            } else if ((inst & 0xFFE08000) == 0x9B200000) {
+                int64_t nval = int64_t(int32_t(regs[rn] & 0xFFFFFFFF));
+                int64_t mval = int64_t(int32_t(regs[rm] & 0xFFFFFFFF));
+                int64_t ra_val = (ra == 31) ? 0 : regs[ra];
+                if (rd != 31) regs[rd] = ra_val + nval * mval;
+            } else if ((inst & 0xFFE08000) == 0x9B208000) {
+                int64_t nval = int64_t(int32_t(regs[rn] & 0xFFFFFFFF));
+                int64_t mval = int64_t(int32_t(regs[rm] & 0xFFFFFFFF));
+                int64_t ra_val = (ra == 31) ? 0 : regs[ra];
+                if (rd != 31) regs[rd] = ra_val - nval * mval;
+            } else if ((inst & 0xFFE08000) == 0x9BA00000) {
+                uint64_t nval = uint64_t(regs[rn]) & 0xFFFFFFFF;
+                uint64_t mval = uint64_t(regs[rm]) & 0xFFFFFFFF;
+                int64_t ra_val = (ra == 31) ? 0 : regs[ra];
+                if (rd != 31) regs[rd] = int64_t(uint64_t(ra_val) + nval * mval);
+            } else if ((inst & 0xFFE08000) == 0x9BA08000) {
+                uint64_t nval = uint64_t(regs[rn]) & 0xFFFFFFFF;
+                uint64_t mval = uint64_t(regs[rm]) & 0xFFFFFFFF;
+                int64_t ra_val = (ra == 31) ? 0 : regs[ra];
+                if (rd != 31) regs[rd] = int64_t(uint64_t(ra_val) - nval * mval);
+            } else if ((inst & 0xFFE08000) == 0x9B008000) {
+                // MSUB 64-bit: Rd = Ra - Rn * Rm
+                int64_t ra_val = (ra == 31) ? 0 : regs[ra];
+                if (rd != 31) regs[rd] = ra_val - regs[rn] * regs[rm];
+            } else if ((inst & 0xFFE08000) == 0x9B000000) {
+                // MADD 64-bit: Rd = Ra + Rn * Rm (MUL when Ra=XZR)
+                int64_t ra_val = (ra == 31) ? 0 : regs[ra];
+                if (rd != 31) regs[rd] = ra_val + regs[rn] * regs[rm];
+            }
+            break;
+        }
+
+        case 0xA8: { // LDP/STP post-index 64-bit
+            if ((inst & 0xFFC00000) == 0xA8C00000) {
+                // LDP post-index 64-bit
+                int32_t imm7 = sign_extend_7((inst >> 15) & 0x7F) * 8;
+                int64_t base = regs[rn];  // rn=31 is SP
+                uint64_t addr = uint64_t(base);
+                if (rd != 31) regs[rd] = load64(memory_out, addr);
+                if (rt2 != 31) regs[rt2] = load64(memory_out, addr + 8);
+                regs[rn] = base + imm7;  // writeback (SP-capable)
+            } else if ((inst & 0xFFC00000) == 0xA8800000) {
+                // STP post-index 64-bit
+                int32_t imm7 = sign_extend_7((inst >> 15) & 0x7F) * 8;
+                int64_t base = regs[rn];  // rn=31 is SP
+                uint64_t addr = uint64_t(base);
+                store64(memory_out, addr, RD_VAL);
+                store64(memory_out, addr + 8, RT2_VAL);
+                regs[rn] = base + imm7;  // writeback (SP-capable)
+            }
+            break;
+        }
+
+        case 0xA9: { // LDP/STP 64-bit
+            if ((inst & 0xFFC00000) == 0xA9C00000) {
+                // LDP pre-index 64-bit
+                int32_t imm7 = sign_extend_7((inst >> 15) & 0x7F) * 8;
+                int64_t base = regs[rn];  // rn=31 is SP
+                int64_t new_base = base + imm7;
+                uint64_t addr = uint64_t(new_base);
+                if (rd != 31) regs[rd] = load64(memory_out, addr);
+                if (rt2 != 31) regs[rt2] = load64(memory_out, addr + 8);
+                regs[rn] = new_base;  // writeback (SP-capable)
+            } else if ((inst & 0xFFC00000) == 0xA9800000) {
+                // STP pre-index 64-bit
+                int32_t imm7 = sign_extend_7((inst >> 15) & 0x7F) * 8;
+                int64_t base = regs[rn];  // rn=31 is SP
+                int64_t new_base = base + imm7;
+                uint64_t addr = uint64_t(new_base);
+                store64(memory_out, addr, RD_VAL);
+                store64(memory_out, addr + 8, RT2_VAL);
+                regs[rn] = new_base;  // writeback (SP-capable)
+            } else if ((inst & 0xFFC00000) == 0xA9400000) {
+                // LDP signed-offset 64-bit
+                int32_t imm7 = sign_extend_7((inst >> 15) & 0x7F) * 8;
+                int64_t base = regs[rn];  // rn=31 is SP
+                uint64_t addr = uint64_t(base + imm7);
+                if (rd != 31) regs[rd] = load64(memory_out, addr);
+                if (rt2 != 31) regs[rt2] = load64(memory_out, addr + 8);
+            } else if ((inst & 0xFFC00000) == 0xA9000000) {
+                // STP signed-offset 64-bit
+                int32_t imm7 = sign_extend_7((inst >> 15) & 0x7F) * 8;
+                int64_t base = regs[rn];  // rn=31 is SP
+                uint64_t addr = uint64_t(base + imm7);
+                store64(memory_out, addr, RD_VAL);
+                store64(memory_out, addr + 8, RT2_VAL);
+            }
+            break;
+        }
+
+        case 0xAA: { // MVN / ORR register 64-bit
+            if ((inst & 0xFFE0FFE0) == 0xAA2003E0) {
+                // MVN - Bitwise NOT: ORN Xd, XZR, Xm
+                if (rd != 31) regs[rd] = ~regs[rm];
+            } else {
+                uint8_t stype = (inst >> 22) & 0x3;
+                uint8_t samt = (inst >> 10) & 0x3F;
+                int64_t rn_val = (rn == 31) ? 0 : regs[rn];
+                int64_t rm_val = (rm == 31) ? 0 : regs[rm];
+                if (stype == 0) rm_val = rm_val << samt;
+                else if (stype == 1) rm_val = int64_t(uint64_t(rm_val) >> samt);
+                else if (stype == 2) rm_val = rm_val >> samt;
+                else if (stype == 3) rm_val = int64_t((uint64_t(rm_val) >> samt) | (uint64_t(rm_val) << (64 - samt)));
+                if (rd != 31) regs[rd] = rn_val | rm_val;
+            }
+            break;
+        }
+
+        case 0xAB: { // ADDS extended / ADDS register 64-bit
+            if ((inst & 0xFFE00000) == 0xAB200000) {
+                // ADDS extended register (64-bit, flag-setting)
+                // CMP with extended reg when Rd=XZR (e.g., CMP X1, W0, SXTW)
+                uint8_t ext_type = (inst >> 13) & 0x7;
+                uint8_t shift = (inst >> 10) & 0x7;
+                int64_t val = apply_extension(regs[rm], ext_type);
+                val = (val << shift);
+                int64_t rn_val = regs[rn];
+                int64_t result = rn_val + val;
+                if (rd != 31) regs[rd] = result;
+                flag_n = (result < 0) ? 1.0f : 0.0f;
+                flag_z = (result == 0) ? 1.0f : 0.0f;
+                flag_c = (uint64_t(result) < uint64_t(rn_val)) ? 1.0f : 0.0f;
+                flag_v = ((rn_val ^ result) & ~(rn_val ^ val) & (int64_t(1) << 63)) ? 1.0f : 0.0f;
+            } else {
+                uint8_t stype = (inst >> 22) & 0x3;
+                uint8_t samt = (inst >> 10) & 0x3F;
+                int64_t rn_val = (rn == 31) ? 0 : regs[rn];
+                int64_t rm_val = (rm == 31) ? 0 : regs[rm];
+                if (stype == 0) rm_val = rm_val << samt;
+                else if (stype == 1) rm_val = int64_t(uint64_t(rm_val) >> samt);
+                else if (stype == 2) rm_val = rm_val >> samt;
+                int64_t result = rn_val + rm_val;
+                if (rd != 31) regs[rd] = result;
+                flag_n = (result < 0) ? 1.0f : 0.0f;
+                flag_z = (result == 0) ? 1.0f : 0.0f;
+                flag_c = (uint64_t(result) < uint64_t(rn_val)) ? 1.0f : 0.0f;
+                flag_v = ((rn_val ^ result) & ~(rn_val ^ rm_val) & (int64_t(1) << 63)) ? 1.0f : 0.0f;
+            }
+            break;
+        }
+
+        case 0xAD: { // STP/LDP Q 128-bit pair
+            if ((inst & 0xFFC00000) == 0xAD000000) {
+                uint8_t rt = inst & 0x1F;
+                uint8_t rt2_v = (inst >> 10) & 0x1F;
+                int32_t offset = sign_extend_7((inst >> 15) & 0x7F) * 16;
+                int64_t base = regs[rn];  // rn=31 is SP
+                uint64_t addr = uint64_t(base + offset);
+                store64(memory_out, addr, vreg_lo[rt]);
+                store64(memory_out, addr + 8, vreg_hi[rt]);
+                store64(memory_out, addr + 16, vreg_lo[rt2_v]);
+                store64(memory_out, addr + 24, vreg_hi[rt2_v]);
+            } else if ((inst & 0xFFC00000) == 0xAD400000) {
+                uint8_t rt = inst & 0x1F;
+                uint8_t rt2_v = (inst >> 10) & 0x1F;
+                int32_t offset = sign_extend_7((inst >> 15) & 0x7F) * 16;
+                int64_t base = regs[rn];  // rn=31 is SP
+                uint64_t addr = uint64_t(base + offset);
+                vreg_lo[rt] = load64(memory_out, addr);
+                vreg_hi[rt] = load64(memory_out, addr + 8);
+                vreg_lo[rt2_v] = load64(memory_out, addr + 16);
+                vreg_hi[rt2_v] = load64(memory_out, addr + 24);
+            }
+            break;
+        }
+
+        case 0xB1: { // ADDS immediate 64-bit
+            int64_t rn_val = regs[rn];
+            int64_t aimm = ((inst >> 22) & 1) ? (int64_t(imm12) << 12) : int64_t(imm12);
+            int64_t result = rn_val + aimm;
+            if (rd != 31) regs[rd] = result;
+            flag_n = (result < 0) ? 1.0f : 0.0f;
+            flag_z = (result == 0) ? 1.0f : 0.0f;
+            flag_c = (uint64_t(rn_val) > uint64_t(result)) ? 1.0f : 0.0f;
+            flag_v = ((rn_val ^ result) & ~(rn_val ^ aimm) & (int64_t(1) << 63)) ? 1.0f : 0.0f;
+            break;
+        }
+
+        case 0xB2: { // ORR immediate 64-bit
+            int64_t bitmask = decode_bitmask_imm(inst);
+            int64_t rn_val = (rn == 31) ? 0 : regs[rn];
+            if (rd != 31) regs[rd] = rn_val | bitmask;
+            break;
+        }
+
+        case 0xB3: { // BFM 64-bit
+            uint8_t immr = (inst >> 16) & 0x3F;
+            uint8_t imms = (inst >> 10) & 0x3F;
+            uint64_t src = uint64_t(regs[rn]);
+            uint64_t dst = (rd != 31) ? uint64_t(regs[rd]) : 0;
+            if (imms >= immr) {
+                // BFXIL: extract (imms-immr+1) bits at immr, insert at bit 0
+                uint8_t width = imms - immr + 1;
+                uint64_t extracted = (src >> immr);
+                uint64_t mask = (width < 64) ? ((uint64_t(1) << width) - 1) : 0xFFFFFFFFFFFFFFFFULL;
+                extracted &= mask;
+                dst = (dst & ~mask) | extracted;
+            } else {
+                // BFI: extract (imms+1) low bits, insert at bit (64-immr)
+                uint8_t width = imms + 1;
+                uint8_t lsb = 64 - immr;
+                uint64_t extracted = src & ((uint64_t(1) << width) - 1);
+                uint64_t mask = ((uint64_t(1) << width) - 1) << lsb;
+                dst = (dst & ~mask) | (extracted << lsb);
+            }
+            if (rd != 31) regs[rd] = int64_t(dst);
+            break;
+        }
+
+        case 0xB8: { // Word LDR/STR complex
             uint8_t opc = (inst >> 22) & 0x3;
             uint8_t opt_bits = (inst >> 10) & 0x3;
 
@@ -1037,280 +2095,121 @@ KERNEL_SOURCE_V2 = """
                     if (rd != 31) regs[rd] = int64_t(val32);
                 }
             }
+            break;
         }
 
-        // ════════════════════════════════════════════════════════════════════
-        // LOAD/STORE PAIR (A8/A9 prefix)
-        // ════════════════════════════════════════════════════════════════════
-        else if ((inst & 0xFFC00000) == 0xA8C00000) {
-            // LDP post-index 64-bit
-            int32_t imm7 = sign_extend_7((inst >> 15) & 0x7F) * 8;
-            int64_t base = regs[rn];  // rn=31 is SP
-            uint64_t addr = uint64_t(base);
-            if (rd != 31) regs[rd] = load64(memory_out, addr);
-            if (rt2 != 31) regs[rt2] = load64(memory_out, addr + 8);
-            regs[rn] = base + imm7;  // writeback (SP-capable)
-        }
-        else if ((inst & 0xFFC00000) == 0xA8800000) {
-            // STP post-index 64-bit
-            int32_t imm7 = sign_extend_7((inst >> 15) & 0x7F) * 8;
-            int64_t base = regs[rn];  // rn=31 is SP
-            uint64_t addr = uint64_t(base);
-            store64(memory_out, addr, RD_VAL);
-            store64(memory_out, addr + 8, RT2_VAL);
-            regs[rn] = base + imm7;  // writeback (SP-capable)
-        }
-        else if ((inst & 0xFFC00000) == 0xA9C00000) {
-            // LDP pre-index 64-bit
-            int32_t imm7 = sign_extend_7((inst >> 15) & 0x7F) * 8;
-            int64_t base = regs[rn];  // rn=31 is SP
-            int64_t new_base = base + imm7;
-            uint64_t addr = uint64_t(new_base);
-            if (rd != 31) regs[rd] = load64(memory_out, addr);
-            if (rt2 != 31) regs[rt2] = load64(memory_out, addr + 8);
-            regs[rn] = new_base;  // writeback (SP-capable)
-        }
-        else if ((inst & 0xFFC00000) == 0xA9800000) {
-            // STP pre-index 64-bit
-            int32_t imm7 = sign_extend_7((inst >> 15) & 0x7F) * 8;
-            int64_t base = regs[rn];  // rn=31 is SP
-            int64_t new_base = base + imm7;
-            uint64_t addr = uint64_t(new_base);
-            store64(memory_out, addr, RD_VAL);
-            store64(memory_out, addr + 8, RT2_VAL);
-            regs[rn] = new_base;  // writeback (SP-capable)
-        }
-        else if ((inst & 0xFFC00000) == 0xA9400000) {
-            // LDP signed-offset 64-bit
-            int32_t imm7 = sign_extend_7((inst >> 15) & 0x7F) * 8;
-            int64_t base = regs[rn];  // rn=31 is SP
-            uint64_t addr = uint64_t(base + imm7);
-            if (rd != 31) regs[rd] = load64(memory_out, addr);
-            if (rt2 != 31) regs[rt2] = load64(memory_out, addr + 8);
-        }
-        else if ((inst & 0xFFC00000) == 0xA9000000) {
-            // STP signed-offset 64-bit
-            int32_t imm7 = sign_extend_7((inst >> 15) & 0x7F) * 8;
-            int64_t base = regs[rn];  // rn=31 is SP
-            uint64_t addr = uint64_t(base + imm7);
-            store64(memory_out, addr, RD_VAL);
-            store64(memory_out, addr + 8, RT2_VAL);
-        }
-
-        // ════════════════════════════════════════════════════════════════════
-        // LOAD/STORE PAIR 32-BIT (28/29 prefix)
-        // ════════════════════════════════════════════════════════════════════
-        else if ((inst & 0xFFC00000) == 0x28C00000) {
-            // LDP post-index 32-bit
-            int32_t imm7 = sign_extend_7((inst >> 15) & 0x7F) * 4;
-            int64_t base = regs[rn];  // rn=31 is SP
-            uint64_t addr = uint64_t(base);
-            if (rd != 31) regs[rd] = int64_t(load32(memory_out, addr)) & 0xFFFFFFFF;
-            if (rt2 != 31) regs[rt2] = int64_t(load32(memory_out, addr + 4)) & 0xFFFFFFFF;
-            regs[rn] = base + imm7;  // writeback (SP-capable)
-        }
-        else if ((inst & 0xFFC00000) == 0x28800000) {
-            // STP post-index 32-bit
-            int32_t imm7 = sign_extend_7((inst >> 15) & 0x7F) * 4;
-            int64_t base = regs[rn];  // rn=31 is SP
-            uint64_t addr = uint64_t(base);
-            store32(memory_out, addr, int32_t(RD_VAL & 0xFFFFFFFF));
-            store32(memory_out, addr + 4, int32_t(RT2_VAL & 0xFFFFFFFF));
-            regs[rn] = base + imm7;  // writeback (SP-capable)
-        }
-        else if ((inst & 0xFFC00000) == 0x29C00000) {
-            // LDP pre-index 32-bit
-            int32_t imm7 = sign_extend_7((inst >> 15) & 0x7F) * 4;
-            int64_t base = regs[rn];  // rn=31 is SP
-            int64_t new_base = base + imm7;
-            uint64_t addr = uint64_t(new_base);
-            if (rd != 31) regs[rd] = int64_t(load32(memory_out, addr)) & 0xFFFFFFFF;
-            if (rt2 != 31) regs[rt2] = int64_t(load32(memory_out, addr + 4)) & 0xFFFFFFFF;
-            regs[rn] = new_base;  // writeback (SP-capable)
-        }
-        else if ((inst & 0xFFC00000) == 0x29800000) {
-            // STP pre-index 32-bit
-            int32_t imm7 = sign_extend_7((inst >> 15) & 0x7F) * 4;
-            int64_t base = regs[rn];  // rn=31 is SP
-            int64_t new_base = base + imm7;
-            uint64_t addr = uint64_t(new_base);
-            store32(memory_out, addr, int32_t(RD_VAL & 0xFFFFFFFF));
-            store32(memory_out, addr + 4, int32_t(RT2_VAL & 0xFFFFFFFF));
-            regs[rn] = new_base;  // writeback (SP-capable)
-        }
-        else if ((inst & 0xFFC00000) == 0x29400000) {
-            // LDP signed-offset 32-bit
-            int32_t imm7 = sign_extend_7((inst >> 15) & 0x7F) * 4;
-            int64_t base = regs[rn];  // rn=31 is SP
-            uint64_t addr = uint64_t(base + imm7);
-            if (rd != 31) regs[rd] = int64_t(load32(memory_out, addr)) & 0xFFFFFFFF;
-            if (rt2 != 31) regs[rt2] = int64_t(load32(memory_out, addr + 4)) & 0xFFFFFFFF;
-        }
-        else if ((inst & 0xFFC00000) == 0x29000000) {
-            // STP signed-offset 32-bit
-            int32_t imm7 = sign_extend_7((inst >> 15) & 0x7F) * 4;
-            int64_t base = regs[rn];  // rn=31 is SP
-            uint64_t addr = uint64_t(base + imm7);
-            store32(memory_out, addr, int32_t(RD_VAL & 0xFFFFFFFF));
-            store32(memory_out, addr + 4, int32_t(RT2_VAL & 0xFFFFFFFF));
-        }
-
-        // ════════════════════════════════════════════════════════════════════
-        // HALFWORD AND SIGNED LOADS/STORES
-        // ════════════════════════════════════════════════════════════════════
-        else if ((inst & 0xFFC00000) == 0x79400000) {
-            // LDRH - Load unsigned halfword
-            int64_t base = regs[rn];  // rn=31 is SP
-            uint64_t addr = uint64_t(base) + (imm12 * 2);
-            if (rd != 31) regs[rd] = load16(memory_out, addr);
-        }
-        else if ((inst & 0xFFC00000) == 0x79000000) {
-            // STRH - Store halfword
-            int64_t base = regs[rn];  // rn=31 is SP
-            uint64_t addr = uint64_t(base) + (imm12 * 2);
-            store16(memory_out, addr, RD_VAL);
-        }
-        else if ((inst & 0xFFC00000) == 0x39800000) {
-            // LDRSB - Load signed byte
-            int64_t base = regs[rn];  // rn=31 is SP
-            uint64_t addr = uint64_t(base) + imm12;
-            int64_t val = int64_t(memory_out[addr]);
-            if (val & 0x80) val |= int64_t(0xFFFFFFFFFFFFFF00);
-            if (rd != 31) regs[rd] = val;
-        }
-        else if ((inst & 0xFFC00000) == 0x79800000) {
-            // LDRSH - Load signed halfword
-            int64_t base = regs[rn];  // rn=31 is SP
-            uint64_t addr = uint64_t(base) + (imm12 * 2);
-            int64_t val = load16(memory_out, addr);
-            if (val & 0x8000) val |= int64_t(0xFFFFFFFFFFFF0000);
-            if (rd != 31) regs[rd] = val;
-        }
-        else if ((inst & 0xFFC00000) == 0xB9800000) {
-            // LDRSW - Load signed word
-            int64_t base = regs[rn];  // rn=31 is SP
-            uint64_t addr = uint64_t(base) + (imm12 * 4);
-            int64_t val = int64_t(load32(memory_out, addr));
-            if (val & 0x80000000) val |= int64_t(0xFFFFFFFF00000000);
-            if (rd != 31) regs[rd] = val;
-        }
-
-        // ════════════════════════════════════════════════════════════════════
-        // ATOMIC LOAD/STORE (simplified - always succeeds)
-        // ════════════════════════════════════════════════════════════════════
-        else if ((inst & 0xFFFFFC00) == 0xC85F7C00) {
-            // LDXR - Load exclusive register
-            int64_t base = regs[rn];  // rn=31 is SP
-            if (rd != 31) regs[rd] = load64(memory_out, uint64_t(base));
-        }
-        else if ((inst & 0xFFE07C00) == 0xC8007C00) {
-            // STXR - Store exclusive register (always succeeds)
-            uint8_t rs = (inst >> 16) & 0x1F;  // Status register
-            int64_t base = regs[rn];  // rn=31 is SP
-            store64(memory_out, uint64_t(base), RD_VAL);
-            if (rs != 31) regs[rs] = 0;  // Success
-        }
-
-        // ════════════════════════════════════════════════════════════════════
-        // BRANCHES
-        // ════════════════════════════════════════════════════════════════════
-        else if ((inst & 0xFFFFFC1F) == 0xD61F0000) {
-            // BR - Branch to register
-            pc = uint64_t((rn == 31) ? 0 : regs[rn]);
-            branch_taken = true;
-        }
-        else if ((inst & 0xFFFFFC1F) == 0xD63F0000) {
-            // BLR - Branch with link to register
-            regs[30] = int64_t(pc + 4);
-            pc = uint64_t((rn == 31) ? 0 : regs[rn]);
-            branch_taken = true;
-        }
-        else if ((inst & 0xFFFFFC1F) == 0xD65F0000) {
-            // RET
-            pc = uint64_t((rn == 31) ? 0 : regs[rn]);
-            branch_taken = true;
-        }
-        else if ((inst & 0xFC000000) == 0x14000000) {
-            // B - Unconditional branch
-            pc = uint64_t(int64_t(pc) + sign_extend_26(imm26) * 4);
-            branch_taken = true;
-        }
-        else if ((inst & 0xFC000000) == 0x94000000) {
-            // BL - Branch with link
-            regs[30] = int64_t(pc + 4);
-            pc = uint64_t(int64_t(pc) + sign_extend_26(imm26) * 4);
-            branch_taken = true;
-        }
-        else if ((inst & 0xFF000010) == 0x54000000) {
-            // B.cond - Conditional branch
-            if (eval_condition(cond, flag_n, flag_z, flag_c, flag_v)) {
-                pc = uint64_t(int64_t(pc) + sign_extend_19(imm19) * 4);
-                branch_taken = true;
+        case 0xB9: { // LDR/STR/LDRSW 32-bit unsigned offset
+            if ((inst & 0xFFC00000) == 0xB9800000) {
+                // LDRSW - Load signed word
+                int64_t base = regs[rn];  // rn=31 is SP
+                uint64_t addr = uint64_t(base) + (imm12 * 4);
+                int64_t val = int64_t(load32(memory_out, addr));
+                if (val & 0x80000000) val |= int64_t(0xFFFFFFFF00000000);
+                if (rd != 31) regs[rd] = val;
+            } else if ((inst & 0xFFC00000) == 0xB9400000) {
+                int64_t base = regs[rn];  // rn=31 is SP
+                uint64_t addr = uint64_t(base) + (imm12 << 2);
+                if (rd != 31) regs[rd] = int64_t(load32(memory_out, addr)) & 0xFFFFFFFF;
+            } else if ((inst & 0xFFC00000) == 0xB9000000) {
+                int64_t base = regs[rn];  // rn=31 is SP
+                uint64_t addr = uint64_t(base) + (imm12 << 2);
+                store32(memory_out, addr, int32_t(RD_VAL & 0xFFFFFFFF));
             }
-        }
-        else if ((inst & 0x7F000000) == 0x34000000) {
-            // CBZ
-            uint8_t rt = inst & 0x1F;
-            if (((rt == 31) ? 0 : regs[rt]) == 0) {
-                pc = uint64_t(int64_t(pc) + sign_extend_19(imm19) * 4);
-                branch_taken = true;
-            }
-        }
-        else if ((inst & 0x7F000000) == 0x35000000) {
-            // CBNZ
-            uint8_t rt = inst & 0x1F;
-            if (((rt == 31) ? 0 : regs[rt]) != 0) {
-                pc = uint64_t(int64_t(pc) + sign_extend_19(imm19) * 4);
-                branch_taken = true;
-            }
-        }
-        else if ((inst & 0x7F000000) == 0x36000000) {
-            // TBZ - Test bit and branch if zero
-            uint8_t rt = inst & 0x1F;
-            uint8_t b5 = (inst >> 31) & 1;
-            uint8_t b40 = (inst >> 19) & 0x1F;
-            uint8_t bit_pos = (b5 << 5) | b40;
-            uint32_t imm14 = (inst >> 5) & 0x3FFF;
-            int64_t val = (rt == 31) ? 0 : regs[rt];
-            if (!(uint64_t(val) & (uint64_t(1) << bit_pos))) {
-                pc = uint64_t(int64_t(pc) + sign_extend_14(imm14) * 4);
-                branch_taken = true;
-            }
-        }
-        else if ((inst & 0x7F000000) == 0x37000000) {
-            // TBNZ - Test bit and branch if not zero
-            uint8_t rt = inst & 0x1F;
-            uint8_t b5 = (inst >> 31) & 1;
-            uint8_t b40 = (inst >> 19) & 0x1F;
-            uint8_t bit_pos = (b5 << 5) | b40;
-            uint32_t imm14 = (inst >> 5) & 0x3FFF;
-            int64_t val = (rt == 31) ? 0 : regs[rt];
-            if (uint64_t(val) & (uint64_t(1) << bit_pos)) {
-                pc = uint64_t(int64_t(pc) + sign_extend_14(imm14) * 4);
-                branch_taken = true;
-            }
+            break;
         }
 
-        // ════════════════════════════════════════════════════════════════════
-        // ADRP (before ADR since 0x90/0xB0/0xD0/0xF0 share prefix)
-        // ════════════════════════════════════════════════════════════════════
-        else if ((inst & 0x9F000000) == 0x90000000) {
-            // ADRP - PC-relative page address
-            uint32_t immlo = (inst >> 29) & 0x3;
-            uint32_t immhi = (inst >> 5) & 0x7FFFF;
-            int32_t offset = sign_extend_21((immhi << 2) | immlo);
-            int64_t page_base = int64_t(pc) & ~int64_t(0xFFF);
-            if (rd != 31) regs[rd] = page_base + (int64_t(offset) << 12);
+        case 0xBD: { // STR/LDR Sn FP 32-bit unsigned offset
+            if ((inst & 0xFFC00000) == 0xBD000000) {
+                uint8_t rt = inst & 0x1F;
+                int64_t base = regs[rn];
+                uint64_t addr = uint64_t(base) + (imm12 * 4);
+                store32(memory_out, addr, int32_t(vreg_lo[rt] & 0xFFFFFFFF));
+            } else if ((inst & 0xFFC00000) == 0xBD400000) {
+                uint8_t rt = inst & 0x1F;
+                int64_t base = regs[rn];
+                uint64_t addr = uint64_t(base) + (imm12 * 4);
+                vreg_lo[rt] = int64_t(uint32_t(load32(memory_out, addr)));
+                vreg_hi[rt] = 0;
+            }
+            break;
         }
 
-        // ════════════════════════════════════════════════════════════════════
-        // WIDE MOVES: MOVZ / MOVK / MOVN (9-bit opcode, bit23=1)
-        // vs LOGICAL IMMEDIATE (bit23=0)
-        // Shared op_bytes: 0x92, 0xD2, 0xF2, 0x12, 0x52, 0x72, 0xB2
-        // ════════════════════════════════════════════════════════════════════
+        case 0x88: { // LDXR/LDAXR/STXR/STLXR 32-bit (Load/Store Exclusive)
+            uint8_t L = (inst >> 22) & 1;
+            int64_t base = (rn == 31) ? regs[31] : regs[rn];  // rn=31 is SP
+            if (L) {
+                // LDXR/LDAXR W - Load exclusive 32-bit (acquire semantics ignored on GPU)
+                if (rd != 31) regs[rd] = int64_t(load32(memory_out, uint64_t(base))) & 0xFFFFFFFF;
+            } else {
+                // STXR/STLXR W - Store exclusive 32-bit (always succeeds on GPU)
+                uint8_t rs = (inst >> 16) & 0x1F;
+                store32(memory_out, uint64_t(base), uint32_t(RD_VAL & 0xFFFFFFFF));
+                if (rs != 31) regs[rs] = 0;  // Always succeeds (single-threaded GPU)
+            }
+            break;
+        }
 
-        // 0xD2: MOVZ 64-bit (bit23=1) or EOR immediate (bit23=0)
-        else if (op_byte == 0xD2) {
+        case 0xC8: { // LDXR/LDAXR/STXR/STLXR 64-bit (Load/Store Exclusive)
+            uint8_t L = (inst >> 22) & 1;
+            int64_t base = (rn == 31) ? regs[31] : regs[rn];  // rn=31 is SP
+            if (L) {
+                // LDXR/LDAXR X - Load exclusive 64-bit
+                if (rd != 31) regs[rd] = load64(memory_out, uint64_t(base));
+            } else {
+                // STXR/STLXR X - Store exclusive 64-bit (always succeeds)
+                uint8_t rs = (inst >> 16) & 0x1F;
+                store64(memory_out, uint64_t(base), RD_VAL);
+                if (rs != 31) regs[rs] = 0;  // Always succeeds (single-threaded GPU)
+            }
+            break;
+        }
+
+        case 0xCA: { // EOR register 64-bit
+            uint8_t stype = (inst >> 22) & 0x3;
+            uint8_t samt = (inst >> 10) & 0x3F;
+            int64_t rn_val = (rn == 31) ? 0 : regs[rn];
+            int64_t rm_val = (rm == 31) ? 0 : regs[rm];
+            if (stype == 0) rm_val = rm_val << samt;
+            else if (stype == 1) rm_val = int64_t(uint64_t(rm_val) >> samt);
+            else if (stype == 2) rm_val = rm_val >> samt;
+            else if (stype == 3) rm_val = int64_t((uint64_t(rm_val) >> samt) | (uint64_t(rm_val) << (64 - samt)));
+            if (rd != 31) regs[rd] = rn_val ^ rm_val;
+            break;
+        }
+
+        case 0xCB: { // NEG / SUB extended / SUB register 64-bit
+            if ((inst & 0xFFE0FFE0) == 0xCB0003E0) {
+                // NEG - Negate: SUB Xd, XZR, Xm
+                if (rd != 31) regs[rd] = -regs[rm];
+            } else if ((inst & 0xFFE00000) == 0xCB200000) {
+                // SUB extended register (rn=31 is SP, rd=31 writes SP)
+                uint8_t ext_type = (inst >> 13) & 0x7;
+                uint8_t shift = (inst >> 10) & 0x7;
+                int64_t val = apply_extension(regs[rm], ext_type);
+                val = (val << shift);
+                int64_t rn_val = regs[rn];
+                regs[rd] = rn_val - val;
+            } else {
+                uint8_t stype = (inst >> 22) & 0x3;
+                uint8_t samt = (inst >> 10) & 0x3F;
+                int64_t rn_val = (rn == 31) ? 0 : regs[rn];
+                int64_t rm_val = (rm == 31) ? 0 : regs[rm];
+                if (stype == 0) rm_val = rm_val << samt;
+                else if (stype == 1) rm_val = int64_t(uint64_t(rm_val) >> samt);
+                else if (stype == 2) rm_val = rm_val >> samt;
+                if (rd != 31) regs[rd] = rn_val - rm_val;
+            }
+            break;
+        }
+
+        case 0xD1: { // SUB immediate 64-bit
+            int64_t rn_val = regs[rn];
+            int64_t aimm = ((inst >> 22) & 1) ? (int64_t(imm12) << 12) : int64_t(imm12);
+            regs[rd] = rn_val - aimm;
+            break;
+        }
+
+        case 0xD2: { // MOVZ 64-bit / EOR immediate 64-bit
             if ((inst >> 23) & 1) {
                 // MOVZ 64-bit
                 if (rd != 31) regs[rd] = int64_t(imm16) << (hw * 16);
@@ -1320,21 +2219,237 @@ KERNEL_SOURCE_V2 = """
                 int64_t rn_val = (rn == 31) ? 0 : regs[rn];
                 if (rd != 31) regs[rd] = rn_val ^ bitmask;
             }
+            break;
         }
-        // 0x52: MOVZ 32-bit (bit23=1) or EOR immediate 32-bit (bit23=0)
-        else if (op_byte == 0x52) {
-            if ((inst >> 23) & 1) {
-                // MOVZ 32-bit
-                if (rd != 31) regs[rd] = (int64_t(imm16) << (hw * 16)) & 0xFFFFFFFF;
+
+        case 0xD3: { // UXTB / UXTH / UBFM 64-bit
+            if ((inst & 0xFFFFFC00) == 0xD3401C00) {
+                // UXTB - Zero extend byte
+                if (rd != 31) regs[rd] = regs[rn] & 0xFF;
+            } else if ((inst & 0xFFFFFC00) == 0xD3403C00) {
+                // UXTH - Zero extend halfword
+                if (rd != 31) regs[rd] = regs[rn] & 0xFFFF;
             } else {
-                // EOR immediate 32-bit
-                int64_t bitmask = decode_bitmask_imm(inst);
-                int64_t rn_val = (rn == 31) ? 0 : regs[rn];
-                if (rd != 31) regs[rd] = (rn_val ^ bitmask) & 0xFFFFFFFF;
+                // UBFM 64-bit: handles LSR_IMM, LSL_IMM, UBFX, UXTB, UXTH
+                uint8_t immr = (inst >> 16) & 0x3F;
+                uint8_t imms = (inst >> 10) & 0x3F;
+                uint64_t val = uint64_t(regs[rn]);
+                uint64_t result;
+                if (imms >= immr) {
+                    // UBFX / LSR: extract (imms-immr+1) bits starting at immr
+                    uint8_t width = imms - immr + 1;
+                    result = val >> immr;
+                    uint64_t mask = (width < 64) ? ((uint64_t(1) << width) - 1) : 0xFFFFFFFFFFFFFFFFULL;
+                    result &= mask;
+                } else {
+                    // UBFIZ / LSL: extract low (imms+1) bits, shift left by (64-immr)
+                    uint64_t src_bits = val & ((uint64_t(1) << (imms + 1)) - 1);
+                    result = src_bits << (64 - immr);
+                }
+                if (rd != 31) regs[rd] = int64_t(result);
             }
+            break;
         }
-        // 0xF2: MOVK 64-bit (bit23=1) or ANDS/TST immediate (bit23=0)
-        else if (op_byte == 0xF2) {
+
+        case 0xD5: { // NOP / System instructions
+            if (inst == 0xD503201F) {
+                // NOP
+            } else if ((inst & 0xFFFFF0FF) == 0xD50330BF) {
+                // no-op
+            } else if ((inst & 0xFFFFF0FF) == 0xD503309F) {
+                // no-op
+            } else if ((inst & 0xFFFFF0FF) == 0xD50330DF) {
+                // no-op
+            } else if ((inst & 0xFFF00000) == 0xD5300000) {
+                // MRS - simplified: return 0 for all system registers
+                if (rd != 31) regs[rd] = 0;
+            } else if ((inst & 0xFFF00000) == 0xD5100000) {
+                // MSR - simplified: discard writes
+            } else if ((inst & 0xFFFFFFE0) == 0xD50B7420) {
+                // DC ZVA, Xt — zero cache line (64 bytes aligned)
+                uint8_t rt_dc = inst & 0x1F;
+                int64_t addr_val = (rt_dc == 31) ? 0 : regs[rt_dc];
+                uint64_t aligned = uint64_t(addr_val) & ~uint64_t(63);
+                for (int i = 0; i < 64; i++) {
+                    memory_out[aligned + i] = 0;
+                }
+            }
+            break;
+        }
+
+        case 0xD6: { // ERET / BR / BLR / RET
+            if (inst == 0xD69F03E0) {
+                // ERET - Simplified: halt (no exception stack on GPU)
+                reason = STOP_HALT;
+                halt_break = true;
+            } else if ((inst & 0xFFFFFC1F) == 0xD61F0000) {
+                // BR - Branch to register
+                pc = uint64_t((rn == 31) ? 0 : regs[rn]);
+                branch_taken = true;
+            } else if ((inst & 0xFFFFFC1F) == 0xD63F0000) {
+                // BLR - Branch with link to register
+                regs[30] = int64_t(pc + 4);
+                pc = uint64_t((rn == 31) ? 0 : regs[rn]);
+                branch_taken = true;
+            } else if ((inst & 0xFFFFFC1F) == 0xD65F0000) {
+                // RET
+                pc = uint64_t((rn == 31) ? 0 : regs[rn]);
+                branch_taken = true;
+            }
+            break;
+        }
+
+        case 0xDA: { // Bit manipulation / CSINV / CSNEG 64-bit
+            if ((inst & 0xFFFFFC00) == 0xDAC01000) {
+                // CLZ - Count leading zeros
+                uint64_t val = uint64_t(regs[rn]) ;
+                int64_t count = 64;
+                for (int i = 63; i >= 0; i--) {
+                    if (val & (uint64_t(1) << i)) { count = 63 - i; break; }
+                }
+                if (rd != 31) regs[rd] = count;
+            } else if ((inst & 0xFFFFFC00) == 0xDAC00000) {
+                // RBIT - Reverse bits
+                uint64_t val = uint64_t(regs[rn]);
+                uint64_t result = 0;
+                for (int i = 0; i < 64; i++) {
+                    if (val & (uint64_t(1) << i)) result |= uint64_t(1) << (63 - i);
+                }
+                if (rd != 31) regs[rd] = int64_t(result);
+            } else if ((inst & 0xFFFFFC00) == 0xDAC00C00) {
+                // REV - Reverse bytes (64-bit)
+                uint64_t val = uint64_t(regs[rn]);
+                uint64_t result = 0;
+                for (int i = 0; i < 8; i++) {
+                    uint64_t b = (val >> (i * 8)) & 0xFF;
+                    result |= b << ((7 - i) * 8);
+                }
+                if (rd != 31) regs[rd] = int64_t(result);
+            } else if ((inst & 0xFFFFFC00) == 0xDAC00400) {
+                // REV16 - Reverse bytes in each 16-bit halfword
+                uint64_t val = uint64_t(regs[rn]);
+                uint64_t result = 0;
+                for (int i = 0; i < 4; i++) {
+                    uint64_t hw_val = (val >> (i * 16)) & 0xFFFF;
+                    uint64_t b0 = hw_val & 0xFF, b1 = (hw_val >> 8) & 0xFF;
+                    result |= ((b0 << 8) | b1) << (i * 16);
+                }
+                if (rd != 31) regs[rd] = int64_t(result);
+            } else if ((inst & 0xFFFFFC00) == 0xDAC00800) {
+                // REV32 - Reverse bytes in each 32-bit word
+                uint64_t val = uint64_t(regs[rn]);
+                uint64_t result = 0;
+                for (int i = 0; i < 2; i++) {
+                    uint64_t word = (val >> (i * 32)) & 0xFFFFFFFF;
+                    uint64_t rev = 0;
+                    for (int j = 0; j < 4; j++) {
+                        rev |= ((word >> (j * 8)) & 0xFF) << ((3 - j) * 8);
+                    }
+                    result |= rev << (i * 32);
+                }
+                if (rd != 31) regs[rd] = int64_t(result);
+            } else if ((inst & 0xFFE00C00) == 0xDA800000) {
+                // CSINV 64-bit: Rd = cond ? Rn : ~Rm (rn/rm=31 → XZR)
+                uint8_t cc = (inst >> 12) & 0xF;
+                bool take = eval_condition(cc, flag_n, flag_z, flag_c, flag_v);
+                int64_t rn_val = (rn == 31) ? 0 : regs[rn];
+                int64_t rm_val = (rm == 31) ? 0 : regs[rm];
+                if (rd != 31) regs[rd] = take ? rn_val : (~rm_val);
+            } else if ((inst & 0xFFE00C00) == 0xDA800400) {
+                // CSNEG 64-bit: Rd = cond ? Rn : -Rm (rn/rm=31 → XZR)
+                uint8_t cc = (inst >> 12) & 0xF;
+                bool take = eval_condition(cc, flag_n, flag_z, flag_c, flag_v);
+                int64_t rn_val = (rn == 31) ? 0 : regs[rn];
+                int64_t rm_val = (rm == 31) ? 0 : regs[rm];
+                if (rd != 31) regs[rd] = take ? rn_val : (-rm_val);
+            }
+            break;
+        }
+
+        case 0xEA: { // TST register / ANDS register 64-bit with shift
+            if ((inst & 0xFFE0001F) == 0xEA00001F) {
+                // TST register 64-bit - ANDS with Rd=XZR, with optional shift
+                uint8_t stype = (inst >> 22) & 0x3;
+                uint8_t samt = (inst >> 10) & 0x3F;
+                int64_t rm_val = (rm == 31) ? 0 : regs[rm];
+                if (stype == 0) rm_val = rm_val << samt;
+                else if (stype == 1) rm_val = int64_t(uint64_t(rm_val) >> samt);
+                else if (stype == 2) rm_val = rm_val >> samt;
+                int64_t result = regs[rn] & rm_val;
+                flag_n = (result < 0) ? 1.0f : 0.0f;
+                flag_z = (result == 0) ? 1.0f : 0.0f;
+                flag_c = 0.0f;
+                flag_v = 0.0f;
+            } else {
+                uint8_t stype = (inst >> 22) & 0x3;
+                uint8_t samt = (inst >> 10) & 0x3F;
+                int64_t rn_val = (rn == 31) ? 0 : regs[rn];
+                int64_t rm_val = (rm == 31) ? 0 : regs[rm];
+                if (op_byte == 0x6A) { rn_val &= 0xFFFFFFFF; rm_val &= 0xFFFFFFFF; }
+                if (stype == 0) rm_val = rm_val << samt;
+                else if (stype == 1) rm_val = int64_t(uint64_t(rm_val) >> samt);
+                else if (stype == 2) rm_val = (op_byte == 0x6A) ? int64_t(int32_t(rm_val) >> samt) : (rm_val >> samt);
+                int64_t result = rn_val & rm_val;
+                if (op_byte == 0x6A) result &= 0xFFFFFFFF;
+                if (rd != 31) regs[rd] = result;
+                if (op_byte == 0x6A) {
+                    flag_n = (result & 0x80000000) ? 1.0f : 0.0f;
+                } else {
+                    flag_n = (result < 0) ? 1.0f : 0.0f;
+                }
+                flag_z = (result == 0) ? 1.0f : 0.0f;
+                flag_c = 0.0f;
+                flag_v = 0.0f;
+            }
+            break;
+        }
+
+        case 0xEB: { // SUBS extended / SUBS register 64-bit
+            if ((inst & 0xFFE00000) == 0xEB200000) {
+                // SUBS extended register (64-bit, flag-setting)
+                // CMP with extended reg when Rd=XZR (e.g., CMP X1, W0, SXTW)
+                uint8_t ext_type = (inst >> 13) & 0x7;
+                uint8_t shift = (inst >> 10) & 0x7;
+                int64_t val = apply_extension(regs[rm], ext_type);
+                val = (val << shift);
+                int64_t rn_val = regs[rn];
+                int64_t result = rn_val - val;
+                if (rd != 31) regs[rd] = result;
+                flag_n = (result < 0) ? 1.0f : 0.0f;
+                flag_z = (result == 0) ? 1.0f : 0.0f;
+                flag_c = (uint64_t(rn_val) >= uint64_t(val)) ? 1.0f : 0.0f;
+                flag_v = ((rn_val ^ val) & (rn_val ^ result) & (int64_t(1) << 63)) ? 1.0f : 0.0f;
+            } else {
+                uint8_t stype = (inst >> 22) & 0x3;
+                uint8_t samt = (inst >> 10) & 0x3F;
+                int64_t rn_val = (rn == 31) ? 0 : regs[rn];
+                int64_t rm_val = (rm == 31) ? 0 : regs[rm];
+                if (stype == 0) rm_val = rm_val << samt;
+                else if (stype == 1) rm_val = int64_t(uint64_t(rm_val) >> samt);
+                else if (stype == 2) rm_val = rm_val >> samt;
+                int64_t result = rn_val - rm_val;
+                if (rd != 31) regs[rd] = result;
+                flag_n = (result < 0) ? 1.0f : 0.0f;
+                flag_z = (result == 0) ? 1.0f : 0.0f;
+                flag_c = (uint64_t(rn_val) >= uint64_t(rm_val)) ? 1.0f : 0.0f;
+                flag_v = ((rn_val ^ rm_val) & (rn_val ^ result) & (int64_t(1) << 63)) ? 1.0f : 0.0f;
+            }
+            break;
+        }
+
+        case 0xF1: { // SUBS immediate 64-bit
+            int64_t rn_val = regs[rn];
+            int64_t aimm = ((inst >> 22) & 1) ? (int64_t(imm12) << 12) : int64_t(imm12);
+            int64_t result = rn_val - aimm;
+            if (rd != 31) regs[rd] = result;
+            flag_n = (result < 0) ? 1.0f : 0.0f;
+            flag_z = (result == 0) ? 1.0f : 0.0f;
+            flag_c = (uint64_t(rn_val) >= uint64_t(aimm)) ? 1.0f : 0.0f;
+            flag_v = ((rn_val ^ aimm) & (rn_val ^ result) & (int64_t(1) << 63)) ? 1.0f : 0.0f;
+            break;
+        }
+
+        case 0xF2: { // MOVK 64-bit / ANDS immediate
             if ((inst >> 23) & 1) {
                 // MOVK 64-bit
                 int64_t mask = ~(int64_t(0xFFFF) << (hw * 16));
@@ -1351,688 +2466,98 @@ KERNEL_SOURCE_V2 = """
                 flag_c = 0.0f;
                 flag_v = 0.0f;
             }
-        }
-        // 0x72: MOVK 32-bit (bit23=1) or ANDS immediate 32-bit (bit23=0)
-        else if (op_byte == 0x72) {
-            if ((inst >> 23) & 1) {
-                // MOVK 32-bit
-                int64_t mask = ~(int64_t(0xFFFF) << (hw * 16));
-                int64_t rd_val = (rd == 31) ? 0 : regs[rd];
-                if (rd != 31) regs[rd] = ((rd_val & mask) | (int64_t(imm16) << (hw * 16))) & 0xFFFFFFFF;
-            } else {
-                // ANDS immediate 32-bit
-                int64_t bitmask = decode_bitmask_imm(inst);
-                int64_t rn_val = (rn == 31) ? 0 : regs[rn];
-                int64_t result = (rn_val & bitmask) & 0xFFFFFFFF;
-                if (rd != 31) regs[rd] = result;
-                flag_n = ((result & 0x80000000) != 0) ? 1.0f : 0.0f;
-                flag_z = (result == 0) ? 1.0f : 0.0f;
-                flag_c = 0.0f;
-                flag_v = 0.0f;
-            }
-        }
-        // 0x92: MOVN 64-bit (bit23=1) or AND immediate 64-bit (bit23=0)
-        else if (op_byte == 0x92) {
-            if ((inst >> 23) & 1) {
-                // MOVN 64-bit
-                if (rd != 31) regs[rd] = ~(int64_t(imm16) << (hw * 16));
-            } else {
-                // AND immediate 64-bit
-                int64_t bitmask = decode_bitmask_imm(inst);
-                int64_t rn_val = (rn == 31) ? 0 : regs[rn];
-                if (rd != 31) regs[rd] = rn_val & bitmask;
-            }
-        }
-        // 0x12: MOVN 32-bit (bit23=1) or AND immediate 32-bit (bit23=0)
-        else if (op_byte == 0x12) {
-            if ((inst >> 23) & 1) {
-                // MOVN 32-bit
-                if (rd != 31) regs[rd] = (~(int64_t(imm16) << (hw * 16))) & 0xFFFFFFFF;
-            } else {
-                // AND immediate 32-bit
-                int64_t bitmask = decode_bitmask_imm(inst);
-                int64_t rn_val = (rn == 31) ? 0 : regs[rn];
-                if (rd != 31) regs[rd] = (rn_val & bitmask) & 0xFFFFFFFF;
-            }
-        }
-        // 0xB2: ORR immediate 64-bit (no wide move shares this)
-        else if (op_byte == 0xB2) {
-            int64_t bitmask = decode_bitmask_imm(inst);
-            int64_t rn_val = (rn == 31) ? 0 : regs[rn];
-            if (rd != 31) regs[rd] = rn_val | bitmask;
-        }
-        // 0x32: ORR immediate 32-bit
-        else if (op_byte == 0x32) {
-            int64_t bitmask = decode_bitmask_imm(inst);
-            int64_t rn_val = (rn == 31) ? 0 : regs[rn];
-            if (rd != 31) regs[rd] = (rn_val | bitmask) & 0xFFFFFFFF;
+            break;
         }
 
-        // ════════════════════════════════════════════════════════════════════
-        // ANDS REGISTER with shift (64-bit: 0xEA, 32-bit: 0x6A)
-        // ════════════════════════════════════════════════════════════════════
-        else if (op_byte == 0xEA || op_byte == 0x6A) {
-            uint8_t stype = (inst >> 22) & 0x3;
-            uint8_t samt = (inst >> 10) & 0x3F;
-            int64_t rn_val = (rn == 31) ? 0 : regs[rn];
-            int64_t rm_val = (rm == 31) ? 0 : regs[rm];
-            if (op_byte == 0x6A) { rn_val &= 0xFFFFFFFF; rm_val &= 0xFFFFFFFF; }
-            if (stype == 0) rm_val = rm_val << samt;
-            else if (stype == 1) rm_val = int64_t(uint64_t(rm_val) >> samt);
-            else if (stype == 2) rm_val = (op_byte == 0x6A) ? int64_t(int32_t(rm_val) >> samt) : (rm_val >> samt);
-            int64_t result = rn_val & rm_val;
-            if (op_byte == 0x6A) result &= 0xFFFFFFFF;
-            if (rd != 31) regs[rd] = result;
-            if (op_byte == 0x6A) {
-                flag_n = (result & 0x80000000) ? 1.0f : 0.0f;
-            } else {
-                flag_n = (result < 0) ? 1.0f : 0.0f;
-            }
-            flag_z = (result == 0) ? 1.0f : 0.0f;
-            flag_c = 0.0f;
-            flag_v = 0.0f;
-        }
+        case 0xF8: { // 64-bit LDR/STR complex
+            uint8_t opc_bit = (inst >> 22) & 0x1;  // 1=load, 0=store
+            uint8_t opt_bits = (inst >> 10) & 0x3;
 
-        // ════════════════════════════════════════════════════════════════════
-        // ALU REGISTER OPERATIONS
-        // ════════════════════════════════════════════════════════════════════
-
-        // ADD immediate (64-bit: 0x91, 32-bit: 0x11)
-        // rn=31 is SP (not XZR), rd=31 writes SP
-        // Bit 22: shift=1 means LSL #12 on imm12
-        else if (op_byte == 0x91) {
-            int64_t rn_val = regs[rn];
-            int64_t aimm = ((inst >> 22) & 1) ? (int64_t(imm12) << 12) : int64_t(imm12);
-            regs[rd] = rn_val + aimm;
-        }
-        else if (op_byte == 0x11) {
-            int64_t rn_val = regs[rn];
-            int64_t aimm = ((inst >> 22) & 1) ? (int64_t(imm12) << 12) : int64_t(imm12);
-            regs[rd] = (rn_val + aimm) & 0xFFFFFFFF;
-        }
-
-        // ADDS immediate (64-bit: 0xB1, 32-bit: 0x31)
-        // rn=31 is SP (not XZR); rd=31 is CMN (flags only, discard result)
-        else if (op_byte == 0xB1) {
-            int64_t rn_val = regs[rn];
-            int64_t aimm = ((inst >> 22) & 1) ? (int64_t(imm12) << 12) : int64_t(imm12);
-            int64_t result = rn_val + aimm;
-            if (rd != 31) regs[rd] = result;
-            flag_n = (result < 0) ? 1.0f : 0.0f;
-            flag_z = (result == 0) ? 1.0f : 0.0f;
-            flag_c = (uint64_t(rn_val) > uint64_t(result)) ? 1.0f : 0.0f;
-            flag_v = ((rn_val ^ result) & ~(rn_val ^ aimm) & (int64_t(1) << 63)) ? 1.0f : 0.0f;
-        }
-        else if (op_byte == 0x31) {
-            int64_t rn_val = regs[rn];
-            int64_t aimm = ((inst >> 22) & 1) ? (int64_t(imm12) << 12) : int64_t(imm12);
-            uint32_t a32 = uint32_t(rn_val);
-            uint32_t b32 = uint32_t(aimm);
-            uint32_t r32 = a32 + b32;
-            int64_t result = int64_t(r32);
-            if (rd != 31) regs[rd] = result;
-            flag_n = ((r32 & 0x80000000u) != 0) ? 1.0f : 0.0f;
-            flag_z = (r32 == 0) ? 1.0f : 0.0f;
-            flag_c = (r32 < a32) ? 1.0f : 0.0f;
-            flag_v = ((a32 ^ r32) & ~(a32 ^ b32) & 0x80000000u) ? 1.0f : 0.0f;
-        }
-
-        // SUB immediate (64-bit: 0xD1, 32-bit: 0x51)
-        // rn=31 is SP (not XZR), rd=31 writes SP
-        else if (op_byte == 0xD1) {
-            int64_t rn_val = regs[rn];
-            int64_t aimm = ((inst >> 22) & 1) ? (int64_t(imm12) << 12) : int64_t(imm12);
-            regs[rd] = rn_val - aimm;
-        }
-        else if (op_byte == 0x51) {
-            int64_t rn_val = regs[rn];
-            int64_t aimm = ((inst >> 22) & 1) ? (int64_t(imm12) << 12) : int64_t(imm12);
-            regs[rd] = (rn_val - aimm) & 0xFFFFFFFF;
-        }
-
-        // SUBS immediate (64-bit: 0xF1, 32-bit: 0x71) — CMP when rd=31
-        // rn=31 is SP (not XZR); rd=31 is CMP (flags only, discard result)
-        else if (op_byte == 0xF1) {
-            int64_t rn_val = regs[rn];
-            int64_t aimm = ((inst >> 22) & 1) ? (int64_t(imm12) << 12) : int64_t(imm12);
-            int64_t result = rn_val - aimm;
-            if (rd != 31) regs[rd] = result;
-            flag_n = (result < 0) ? 1.0f : 0.0f;
-            flag_z = (result == 0) ? 1.0f : 0.0f;
-            flag_c = (uint64_t(rn_val) >= uint64_t(aimm)) ? 1.0f : 0.0f;
-            flag_v = ((rn_val ^ aimm) & (rn_val ^ result) & (int64_t(1) << 63)) ? 1.0f : 0.0f;
-        }
-        else if (op_byte == 0x71) {
-            int64_t rn_val = regs[rn];
-            int64_t aimm = ((inst >> 22) & 1) ? (int64_t(imm12) << 12) : int64_t(imm12);
-            uint32_t a32 = uint32_t(rn_val);
-            uint32_t b32 = uint32_t(aimm);
-            uint32_t r32 = a32 - b32;
-            int64_t result = int64_t(r32);
-            if (rd != 31) regs[rd] = result;
-            flag_n = ((r32 & 0x80000000u) != 0) ? 1.0f : 0.0f;
-            flag_z = (r32 == 0) ? 1.0f : 0.0f;
-            flag_c = (a32 >= b32) ? 1.0f : 0.0f;
-            flag_v = ((a32 ^ b32) & (a32 ^ r32) & 0x80000000u) ? 1.0f : 0.0f;
-        }
-
-        // ADD register with optional shift (64-bit: 0x8B, 32-bit: 0x0B)
-        // Encoding: ADD Xd, Xn, Xm, {LSL|LSR|ASR #amount}
-        // Bits [23:22] = shift type, bits [15:10] = shift amount
-        else if (op_byte == 0x8B) {
-            uint8_t stype = (inst >> 22) & 0x3;
-            uint8_t samt = (inst >> 10) & 0x3F;
-            int64_t rn_val = (rn == 31) ? 0 : regs[rn];
-            int64_t rm_val = (rm == 31) ? 0 : regs[rm];
-            if (stype == 0) rm_val = rm_val << samt;
-            else if (stype == 1) rm_val = int64_t(uint64_t(rm_val) >> samt);
-            else if (stype == 2) rm_val = rm_val >> samt;
-            if (rd != 31) regs[rd] = rn_val + rm_val;
-        }
-        else if (op_byte == 0x0B) {
-            uint8_t stype = (inst >> 22) & 0x3;
-            uint8_t samt = (inst >> 10) & 0x3F;
-            int64_t rn_val = (rn == 31) ? 0 : regs[rn];
-            int64_t rm_val = (rm == 31) ? 0 : regs[rm];
-            if (stype == 0) rm_val = rm_val << samt;
-            else if (stype == 1) rm_val = int64_t(uint64_t(rm_val) >> samt);
-            else if (stype == 2) rm_val = rm_val >> samt;
-            if (rd != 31) regs[rd] = (rn_val + rm_val) & 0xFFFFFFFF;
-        }
-
-        // ADDS register with optional shift (64-bit: 0xAB, 32-bit: 0x2B)
-        else if (op_byte == 0xAB) {
-            uint8_t stype = (inst >> 22) & 0x3;
-            uint8_t samt = (inst >> 10) & 0x3F;
-            int64_t rn_val = (rn == 31) ? 0 : regs[rn];
-            int64_t rm_val = (rm == 31) ? 0 : regs[rm];
-            if (stype == 0) rm_val = rm_val << samt;
-            else if (stype == 1) rm_val = int64_t(uint64_t(rm_val) >> samt);
-            else if (stype == 2) rm_val = rm_val >> samt;
-            int64_t result = rn_val + rm_val;
-            if (rd != 31) regs[rd] = result;
-            flag_n = (result < 0) ? 1.0f : 0.0f;
-            flag_z = (result == 0) ? 1.0f : 0.0f;
-            flag_c = (uint64_t(result) < uint64_t(rn_val)) ? 1.0f : 0.0f;
-            flag_v = ((rn_val ^ result) & ~(rn_val ^ rm_val) & (int64_t(1) << 63)) ? 1.0f : 0.0f;
-        }
-
-        // SUB register with optional shift (64-bit: 0xCB, 32-bit: 0x4B)
-        // Note: NEG already handled above (specific pattern)
-        else if (op_byte == 0xCB) {
-            uint8_t stype = (inst >> 22) & 0x3;
-            uint8_t samt = (inst >> 10) & 0x3F;
-            int64_t rn_val = (rn == 31) ? 0 : regs[rn];
-            int64_t rm_val = (rm == 31) ? 0 : regs[rm];
-            if (stype == 0) rm_val = rm_val << samt;
-            else if (stype == 1) rm_val = int64_t(uint64_t(rm_val) >> samt);
-            else if (stype == 2) rm_val = rm_val >> samt;
-            if (rd != 31) regs[rd] = rn_val - rm_val;
-        }
-        else if (op_byte == 0x4B) {
-            uint8_t stype = (inst >> 22) & 0x3;
-            uint8_t samt = (inst >> 10) & 0x3F;
-            int64_t rn_val = (rn == 31) ? 0 : regs[rn];
-            int64_t rm_val = (rm == 31) ? 0 : regs[rm];
-            if (stype == 0) rm_val = rm_val << samt;
-            else if (stype == 1) rm_val = int64_t(uint64_t(rm_val) >> samt);
-            else if (stype == 2) rm_val = rm_val >> samt;
-            if (rd != 31) regs[rd] = (rn_val - rm_val) & 0xFFFFFFFF;
-        }
-
-        // SUBS register with optional shift (64-bit: 0xEB, 32-bit: 0x6B)
-        else if (op_byte == 0xEB) {
-            uint8_t stype = (inst >> 22) & 0x3;
-            uint8_t samt = (inst >> 10) & 0x3F;
-            int64_t rn_val = (rn == 31) ? 0 : regs[rn];
-            int64_t rm_val = (rm == 31) ? 0 : regs[rm];
-            if (stype == 0) rm_val = rm_val << samt;
-            else if (stype == 1) rm_val = int64_t(uint64_t(rm_val) >> samt);
-            else if (stype == 2) rm_val = rm_val >> samt;
-            int64_t result = rn_val - rm_val;
-            if (rd != 31) regs[rd] = result;
-            flag_n = (result < 0) ? 1.0f : 0.0f;
-            flag_z = (result == 0) ? 1.0f : 0.0f;
-            flag_c = (uint64_t(rn_val) >= uint64_t(rm_val)) ? 1.0f : 0.0f;
-            flag_v = ((rn_val ^ rm_val) & (rn_val ^ result) & (int64_t(1) << 63)) ? 1.0f : 0.0f;
-        }
-        else if (op_byte == 0x6B) {
-            uint8_t stype = (inst >> 22) & 0x3;
-            uint8_t samt = (inst >> 10) & 0x3F;
-            int64_t rn_val = (rn == 31) ? 0 : regs[rn];
-            int64_t rm_val = (rm == 31) ? 0 : regs[rm];
-            if (stype == 0) rm_val = rm_val << samt;
-            else if (stype == 1) rm_val = int64_t(uint64_t(rm_val) >> samt);
-            else if (stype == 2) rm_val = rm_val >> samt;
-            uint32_t a32 = uint32_t(rn_val);
-            uint32_t b32 = uint32_t(rm_val);
-            uint32_t r32 = a32 - b32;
-            int64_t result = int64_t(r32);
-            if (rd != 31) regs[rd] = result;
-            flag_n = ((r32 & 0x80000000u) != 0) ? 1.0f : 0.0f;
-            flag_z = (r32 == 0) ? 1.0f : 0.0f;
-            flag_c = (a32 >= b32) ? 1.0f : 0.0f;
-            flag_v = ((a32 ^ b32) & (a32 ^ r32) & 0x80000000u) ? 1.0f : 0.0f;
-        }
-
-        // AND register with optional shift (64-bit: 0x8A, 32-bit: 0x0A)
-        // Note: BIC already handled above (specific pattern 0x8A200000)
-        else if (op_byte == 0x8A) {
-            uint8_t stype = (inst >> 22) & 0x3;
-            uint8_t samt = (inst >> 10) & 0x3F;
-            int64_t rn_val = (rn == 31) ? 0 : regs[rn];
-            int64_t rm_val = (rm == 31) ? 0 : regs[rm];
-            if (stype == 0) rm_val = rm_val << samt;
-            else if (stype == 1) rm_val = int64_t(uint64_t(rm_val) >> samt);
-            else if (stype == 2) rm_val = rm_val >> samt;
-            else if (stype == 3) rm_val = int64_t((uint64_t(rm_val) >> samt) | (uint64_t(rm_val) << (64 - samt)));
-            if (rd != 31) regs[rd] = rn_val & rm_val;
-        }
-        else if (op_byte == 0x0A) {
-            uint8_t stype = (inst >> 22) & 0x3;
-            uint8_t samt = (inst >> 10) & 0x3F;
-            int64_t rn_val = (rn == 31) ? 0 : regs[rn];
-            int64_t rm_val = (rm == 31) ? 0 : regs[rm];
-            if (stype == 0) rm_val = rm_val << samt;
-            else if (stype == 1) rm_val = int64_t(uint64_t(rm_val) >> samt);
-            else if (stype == 2) rm_val = rm_val >> samt;
-            else if (stype == 3) rm_val = int64_t((uint64_t(rm_val) >> samt) | (uint64_t(rm_val) << (32 - samt))) & 0xFFFFFFFF;
-            if (rd != 31) regs[rd] = (rn_val & rm_val) & 0xFFFFFFFF;
-        }
-
-        // ORR register with optional shift (64-bit: 0xAA, 32-bit: 0x2A)
-        // Note: MVN already handled above (specific pattern 0xAA2003E0)
-        else if (op_byte == 0xAA) {
-            uint8_t stype = (inst >> 22) & 0x3;
-            uint8_t samt = (inst >> 10) & 0x3F;
-            int64_t rn_val = (rn == 31) ? 0 : regs[rn];
-            int64_t rm_val = (rm == 31) ? 0 : regs[rm];
-            if (stype == 0) rm_val = rm_val << samt;
-            else if (stype == 1) rm_val = int64_t(uint64_t(rm_val) >> samt);
-            else if (stype == 2) rm_val = rm_val >> samt;
-            else if (stype == 3) rm_val = int64_t((uint64_t(rm_val) >> samt) | (uint64_t(rm_val) << (64 - samt)));
-            if (rd != 31) regs[rd] = rn_val | rm_val;
-        }
-        else if (op_byte == 0x2A) {
-            uint8_t stype = (inst >> 22) & 0x3;
-            uint8_t samt = (inst >> 10) & 0x3F;
-            int64_t rn_val = (rn == 31) ? 0 : regs[rn];
-            int64_t rm_val = (rm == 31) ? 0 : regs[rm];
-            if (stype == 0) rm_val = rm_val << samt;
-            else if (stype == 1) rm_val = int64_t(uint64_t(rm_val) >> samt);
-            else if (stype == 2) rm_val = rm_val >> samt;
-            else if (stype == 3) rm_val = int64_t((uint64_t(rm_val) >> samt) | (uint64_t(rm_val) << (32 - samt))) & 0xFFFFFFFF;
-            if (rd != 31) regs[rd] = (rn_val | rm_val) & 0xFFFFFFFF;
-        }
-
-        // EOR register with optional shift (64-bit: 0xCA, 32-bit: 0x4A)
-        else if (op_byte == 0xCA) {
-            uint8_t stype = (inst >> 22) & 0x3;
-            uint8_t samt = (inst >> 10) & 0x3F;
-            int64_t rn_val = (rn == 31) ? 0 : regs[rn];
-            int64_t rm_val = (rm == 31) ? 0 : regs[rm];
-            if (stype == 0) rm_val = rm_val << samt;
-            else if (stype == 1) rm_val = int64_t(uint64_t(rm_val) >> samt);
-            else if (stype == 2) rm_val = rm_val >> samt;
-            else if (stype == 3) rm_val = int64_t((uint64_t(rm_val) >> samt) | (uint64_t(rm_val) << (64 - samt)));
-            if (rd != 31) regs[rd] = rn_val ^ rm_val;
-        }
-        else if (op_byte == 0x4A) {
-            uint8_t stype = (inst >> 22) & 0x3;
-            uint8_t samt = (inst >> 10) & 0x3F;
-            int64_t rn_val = (rn == 31) ? 0 : regs[rn];
-            int64_t rm_val = (rm == 31) ? 0 : regs[rm];
-            if (stype == 0) rm_val = rm_val << samt;
-            else if (stype == 1) rm_val = int64_t(uint64_t(rm_val) >> samt);
-            else if (stype == 2) rm_val = rm_val >> samt;
-            else if (stype == 3) rm_val = int64_t((uint64_t(rm_val) >> samt) | (uint64_t(rm_val) << (32 - samt))) & 0xFFFFFFFF;
-            if (rd != 31) regs[rd] = (rn_val ^ rm_val) & 0xFFFFFFFF;
-        }
-
-        // ════════════════════════════════════════════════════════════════════
-        // ADR (PC-relative address - 0x10)
-        // ════════════════════════════════════════════════════════════════════
-        else if (op_byte == 0x10) {
-            uint32_t immlo = (inst >> 29) & 0x3;
-            uint32_t immhi = (inst >> 5) & 0x7FFFF;
-            int32_t offset = sign_extend_21((immhi << 2) | immlo);
-            if (rd != 31) regs[rd] = int64_t(pc) + offset;
-        }
-
-        // ════════════════════════════════════════════════════════════════════
-        // UBFM / SBFM / EXTR (bitfield operations)
-        // ════════════════════════════════════════════════════════════════════
-        else if (op_byte == 0xD3) {
-            // UBFM 64-bit: handles LSR_IMM, LSL_IMM, UBFX, UXTB, UXTH
-            uint8_t immr = (inst >> 16) & 0x3F;
-            uint8_t imms = (inst >> 10) & 0x3F;
-            uint64_t val = uint64_t(regs[rn]);
-            uint64_t result;
-            if (imms >= immr) {
-                // UBFX / LSR: extract (imms-immr+1) bits starting at immr
-                uint8_t width = imms - immr + 1;
-                result = val >> immr;
-                uint64_t mask = (width < 64) ? ((uint64_t(1) << width) - 1) : 0xFFFFFFFFFFFFFFFFULL;
-                result &= mask;
-            } else {
-                // UBFIZ / LSL: extract low (imms+1) bits, shift left by (64-immr)
-                uint64_t src_bits = val & ((uint64_t(1) << (imms + 1)) - 1);
-                result = src_bits << (64 - immr);
-            }
-            if (rd != 31) regs[rd] = int64_t(result);
-        }
-        else if (op_byte == 0x53) {
-            // UBFM 32-bit
-            uint8_t immr = (inst >> 16) & 0x3F;
-            uint8_t imms = (inst >> 10) & 0x3F;
-            uint32_t val = uint32_t(regs[rn] & 0xFFFFFFFF);
-            uint32_t result;
-            if (imms >= immr) {
-                // UBFX 32-bit: extract (imms-immr+1) bits starting at immr
-                uint8_t width = imms - immr + 1;
-                result = val >> immr;
-                uint32_t mask = (width < 32) ? ((uint32_t(1) << width) - 1) : 0xFFFFFFFF;
-                result &= mask;
-            } else {
-                // UBFIZ / LSL: extract low (imms+1) bits, shift left by (32-immr)
-                uint32_t src_bits = val & ((uint32_t(1) << (imms + 1)) - 1);
-                result = src_bits << (32 - immr);
-            }
-            if (rd != 31) regs[rd] = int64_t(result);
-        }
-        else if (op_byte == 0x13) {
-            // SBFM 32-bit (also handles ASR_IMM 32-bit, SBFX 32-bit, SXTB, SXTH)
-            uint8_t immr = (inst >> 16) & 0x3F;
-            uint8_t imms = (inst >> 10) & 0x3F;
-            uint32_t val = uint32_t(regs[rn] & 0xFFFFFFFF);
-            uint32_t result;
-            if (imms >= immr) {
-                // SBFX / ASR 32-bit: extract (imms-immr+1) bits at immr, sign extend
-                uint8_t width = imms - immr + 1;
-                result = val >> immr;
-                uint32_t mask = (width < 32) ? ((uint32_t(1) << width) - 1) : 0xFFFFFFFF;
-                result &= mask;
-                // Sign extend from bit (width - 1) within 32-bit result
-                if (width < 32 && (result & (uint32_t(1) << (width - 1)))) {
-                    result |= ~mask;
+            if (opt_bits == 0x2) {
+                // Register offset: LDR/STR Xt, [Xn, Xm, LSL #shift]
+                uint8_t shift_bit = (inst >> 12) & 0x1;
+                int64_t base = regs[rn];  // rn=31 is SP
+                int64_t offset = ((rm == 31) ? 0 : regs[rm]) << (shift_bit ? 3 : 0);
+                uint64_t addr = uint64_t(base + offset);
+                if (opc_bit) {
+                    if (rd != 31) regs[rd] = load64(memory_out, addr);
+                } else {
+                    store64(memory_out, addr, RD_VAL);
+                }
+            } else if (opt_bits == 0x1) {
+                // Post-index: LDR/STR Xt, [Xn], #imm9
+                int32_t imm9 = sign_extend_9((inst >> 12) & 0x1FF);
+                int64_t base = regs[rn];  // rn=31 is SP
+                uint64_t addr = uint64_t(base);
+                if (opc_bit) {
+                    if (rd != 31) regs[rd] = load64(memory_out, addr);
+                } else {
+                    store64(memory_out, addr, RD_VAL);
+                }
+                regs[rn] = base + imm9;  // writeback (SP-capable)
+            } else if (opt_bits == 0x3) {
+                // Pre-index: LDR/STR Xt, [Xn, #imm9]!
+                int32_t imm9 = sign_extend_9((inst >> 12) & 0x1FF);
+                int64_t base = regs[rn];  // rn=31 is SP
+                int64_t new_base = base + imm9;
+                regs[rn] = new_base;  // writeback (SP-capable)
+                uint64_t addr = uint64_t(new_base);
+                if (opc_bit) {
+                    if (rd != 31) regs[rd] = load64(memory_out, addr);
+                } else {
+                    store64(memory_out, addr, RD_VAL);
                 }
             } else {
-                // SBFIZ: extract (imms+1) low bits, sign-extend, shift left by (32-immr)
-                uint32_t width = imms + 1;
-                uint32_t lsb = 32 - immr;
-                uint32_t mask = (uint32_t(1) << width) - 1;
-                uint32_t src_bits = val & mask;
-                if (src_bits & (uint32_t(1) << (width - 1))) {
-                    src_bits |= ~mask;
+                // Unscaled: LDUR/STUR
+                int32_t imm9 = sign_extend_9((inst >> 12) & 0x1FF);
+                int64_t base = regs[rn];  // rn=31 is SP
+                uint64_t addr = uint64_t(base + imm9);
+                if (opc_bit) {
+                    if (rd != 31) regs[rd] = load64(memory_out, addr);
+                } else {
+                    store64(memory_out, addr, RD_VAL);
                 }
-                result = src_bits << lsb;
             }
-            // 32-bit SBFM: zero-extend to 64 bits (sign is within 32-bit result)
-            if (rd != 31) regs[rd] = int64_t(uint64_t(result));
+            break;
         }
-        else if (op_byte == 0x93) {
-            // SBFM 64-bit (also handles ASR_IMM, SBFX, SXTB, SXTH, SXTW)
-            uint8_t immr = (inst >> 16) & 0x3F;
-            uint8_t imms = (inst >> 10) & 0x3F;
-            uint64_t val = uint64_t(regs[rn]);
-            uint64_t result;
-            if (imms >= immr) {
-                // SBFX / ASR: extract (imms-immr+1) bits at immr, sign extend
-                uint8_t width = imms - immr + 1;
-                result = val >> immr;
-                uint64_t mask = (width < 64) ? ((uint64_t(1) << width) - 1) : 0xFFFFFFFFFFFFFFFFULL;
-                result &= mask;
-                // Sign extend from bit (width - 1)
-                if (width < 64 && (result & (uint64_t(1) << (width - 1)))) {
-                    result |= ~mask;
-                }
-            } else {
-                // SBFIZ: extract (imms+1) low bits, sign-extend, shift left by (64-immr)
-                uint64_t width = imms + 1;
-                uint64_t lsb = 64 - immr;
-                uint64_t mask = (uint64_t(1) << width) - 1;
-                uint64_t src_bits = val & mask;
-                if (src_bits & (uint64_t(1) << (width - 1))) {
-                    src_bits |= ~mask;
-                }
-                result = src_bits << lsb;
+
+        case 0xF9: { // LDR/STR 64-bit unsigned offset
+            if ((inst & 0xFFC00000) == 0xF9400000) {
+                int64_t base = regs[rn];  // rn=31 is SP
+                uint64_t addr = uint64_t(base) + (imm12 << 3);
+                if (rd != 31) regs[rd] = load64(memory_out, addr);
+            } else if ((inst & 0xFFC00000) == 0xF9000000) {
+                int64_t base = regs[rn];  // rn=31 is SP
+                uint64_t addr = uint64_t(base) + (imm12 << 3);
+                store64(memory_out, addr, RD_VAL);
             }
-            if (rd != 31) regs[rd] = int64_t(result);
+            break;
         }
-        // BFM 32-bit (0x33): handles BFI, BFXIL — inserts bits, preserves rest of Rd
-        else if (op_byte == 0x33) {
-            uint8_t immr = (inst >> 16) & 0x3F;
-            uint8_t imms = (inst >> 10) & 0x3F;
-            uint32_t src = uint32_t(regs[rn] & 0xFFFFFFFF);
-            uint32_t dst = (rd != 31) ? uint32_t(regs[rd] & 0xFFFFFFFF) : 0;
-            if (imms >= immr) {
-                // BFXIL: extract (imms-immr+1) bits at immr from src, insert at bit 0 of dst
-                uint8_t width = imms - immr + 1;
-                uint32_t extracted = (src >> immr);
-                uint32_t mask = (width < 32) ? ((uint32_t(1) << width) - 1) : 0xFFFFFFFF;
-                extracted &= mask;
-                dst = (dst & ~mask) | extracted;
-            } else {
-                // BFI: extract (imms+1) low bits of src, insert at bit (32-immr) of dst
-                uint8_t width = imms + 1;
-                uint8_t lsb = 32 - immr;
-                uint32_t extracted = src & ((uint32_t(1) << width) - 1);
-                uint32_t mask = ((uint32_t(1) << width) - 1) << lsb;
-                dst = (dst & ~mask) | (extracted << lsb);
+
+        case 0xFD: { // STR/LDR Dn FP 64-bit unsigned offset
+            if ((inst & 0xFFC00000) == 0xFD000000) {
+                uint8_t rt = inst & 0x1F;
+                int64_t base = regs[rn];
+                uint64_t addr = uint64_t(base) + (imm12 * 8);
+                store64(memory_out, addr, vreg_lo[rt]);
+            } else if ((inst & 0xFFC00000) == 0xFD400000) {
+                uint8_t rt = inst & 0x1F;
+                int64_t base = regs[rn];
+                uint64_t addr = uint64_t(base) + (imm12 * 8);
+                vreg_lo[rt] = load64(memory_out, addr);
+                vreg_hi[rt] = 0;
             }
-            if (rd != 31) regs[rd] = int64_t(dst);  // zero-extend to 64
-        }
-        // BFM 64-bit (0xB3): handles BFI, BFXIL — inserts bits, preserves rest of Rd
-        else if (op_byte == 0xB3) {
-            uint8_t immr = (inst >> 16) & 0x3F;
-            uint8_t imms = (inst >> 10) & 0x3F;
-            uint64_t src = uint64_t(regs[rn]);
-            uint64_t dst = (rd != 31) ? uint64_t(regs[rd]) : 0;
-            if (imms >= immr) {
-                // BFXIL: extract (imms-immr+1) bits at immr, insert at bit 0
-                uint8_t width = imms - immr + 1;
-                uint64_t extracted = (src >> immr);
-                uint64_t mask = (width < 64) ? ((uint64_t(1) << width) - 1) : 0xFFFFFFFFFFFFFFFFULL;
-                extracted &= mask;
-                dst = (dst & ~mask) | extracted;
-            } else {
-                // BFI: extract (imms+1) low bits, insert at bit (64-immr)
-                uint8_t width = imms + 1;
-                uint8_t lsb = 64 - immr;
-                uint64_t extracted = src & ((uint64_t(1) << width) - 1);
-                uint64_t mask = ((uint64_t(1) << width) - 1) << lsb;
-                dst = (dst & ~mask) | (extracted << lsb);
-            }
-            if (rd != 31) regs[rd] = int64_t(dst);
-        }
-        // EXTR: 0x93C00000
-        else if ((inst & 0xFFE00000) == 0x93C00000) {
-            uint64_t val_n = uint64_t(regs[rn]);
-            uint64_t val_m = uint64_t(regs[rm]);
-            uint8_t lsb = (inst >> 10) & 0x3F;
-            // Concatenate [Rn:Rm] and extract 64 bits starting at lsb
-            // result = (Rn:Rm >> lsb)[63:0]
-            uint64_t result;
-            if (lsb == 0) {
-                result = val_m;
-            } else {
-                result = (val_m >> lsb) | (val_n << (64 - lsb));
-            }
-            if (rd != 31) regs[rd] = int64_t(result);
+            break;
         }
 
-        // ════════════════════════════════════════════════════════════════════
-        // STANDARD MEMORY OPERATIONS (unsigned offset)
-        // ════════════════════════════════════════════════════════════════════
-
-        // LDR 64-bit unsigned offset
-        else if ((inst & 0xFFC00000) == 0xF9400000) {
-            int64_t base = regs[rn];  // rn=31 is SP
-            uint64_t addr = uint64_t(base) + (imm12 << 3);
-            if (rd != 31) regs[rd] = load64(memory_out, addr);
-        }
-        // STR 64-bit unsigned offset
-        else if ((inst & 0xFFC00000) == 0xF9000000) {
-            int64_t base = regs[rn];  // rn=31 is SP
-            uint64_t addr = uint64_t(base) + (imm12 << 3);
-            store64(memory_out, addr, RD_VAL);
-        }
-        // LDR 32-bit unsigned offset
-        else if ((inst & 0xFFC00000) == 0xB9400000) {
-            int64_t base = regs[rn];  // rn=31 is SP
-            uint64_t addr = uint64_t(base) + (imm12 << 2);
-            if (rd != 31) regs[rd] = int64_t(load32(memory_out, addr)) & 0xFFFFFFFF;
-        }
-        // STR 32-bit unsigned offset
-        else if ((inst & 0xFFC00000) == 0xB9000000) {
-            int64_t base = regs[rn];  // rn=31 is SP
-            uint64_t addr = uint64_t(base) + (imm12 << 2);
-            store32(memory_out, addr, int32_t(RD_VAL & 0xFFFFFFFF));
-        }
-        // LDRB unsigned offset
-        else if ((inst & 0xFFC00000) == 0x39400000) {
-            int64_t base = regs[rn];  // rn=31 is SP
-            uint64_t addr = uint64_t(base) + imm12;
-            if (rd != 31) regs[rd] = int64_t(memory_out[addr]);
-        }
-        // STRB unsigned offset
-        else if ((inst & 0xFFC00000) == 0x39000000) {
-            int64_t base = regs[rn];  // rn=31 is SP
-            uint64_t addr = uint64_t(base) + imm12;
-            memory_out[addr] = uint8_t(RD_VAL & 0xFF);
+        default: { // Unknown instruction - NOP
+            break;
         }
 
-        // ════════════════════════════════════════════════════════════════════
-        // B.cond already handled in BRANCHES section above
-        // ════════════════════════════════════════════════════════════════════
+        } // end switch(op_byte)
 
-        // ════════════════════════════════════════════════════════════════════
-        // SIMD/FP LOAD-STORE (for musl va_list save/restore)
-        // Only memory operations — no FP arithmetic. V regs as opaque 128-bit.
-        // ════════════════════════════════════════════════════════════════════
-
-        // STR Qn, [Xm, #imm12*16] — 128-bit store (unsigned offset)
-        // Encoding: 0x3D800000 | (imm12 << 10) | (Rn << 5) | Rt
-        else if ((inst & 0xFFC00000) == 0x3D800000) {
-            uint8_t rt = inst & 0x1F;
-            int64_t base = regs[rn];  // rn=31 is SP
-            uint64_t addr = uint64_t(base) + (imm12 * 16);
-            store64(memory_out, addr, vreg_lo[rt]);
-            store64(memory_out, addr + 8, vreg_hi[rt]);
-        }
-        // LDR Qn, [Xm, #imm12*16] — 128-bit load (unsigned offset)
-        // Encoding: 0x3DC00000 | (imm12 << 10) | (Rn << 5) | Rt
-        else if ((inst & 0xFFC00000) == 0x3DC00000) {
-            uint8_t rt = inst & 0x1F;
-            int64_t base = regs[rn];  // rn=31 is SP
-            uint64_t addr = uint64_t(base) + (imm12 * 16);
-            vreg_lo[rt] = load64(memory_out, addr);
-            vreg_hi[rt] = load64(memory_out, addr + 8);
-        }
-        // STP Qn, Qm, [Xn, #imm7*16] — store pair 128-bit (signed offset)
-        // Encoding: 0xAD000000 | (imm7 << 15) | (Rt2 << 10) | (Rn << 5) | Rt
-        else if ((inst & 0xFFC00000) == 0xAD000000) {
-            uint8_t rt = inst & 0x1F;
-            uint8_t rt2_v = (inst >> 10) & 0x1F;
-            int32_t offset = sign_extend_7((inst >> 15) & 0x7F) * 16;
-            int64_t base = regs[rn];  // rn=31 is SP
-            uint64_t addr = uint64_t(base + offset);
-            store64(memory_out, addr, vreg_lo[rt]);
-            store64(memory_out, addr + 8, vreg_hi[rt]);
-            store64(memory_out, addr + 16, vreg_lo[rt2_v]);
-            store64(memory_out, addr + 24, vreg_hi[rt2_v]);
-        }
-        // LDP Qn, Qm, [Xn, #imm7*16] — load pair 128-bit (signed offset)
-        // Encoding: 0xAD400000 | (imm7 << 15) | (Rt2 << 10) | (Rn << 5) | Rt
-        else if ((inst & 0xFFC00000) == 0xAD400000) {
-            uint8_t rt = inst & 0x1F;
-            uint8_t rt2_v = (inst >> 10) & 0x1F;
-            int32_t offset = sign_extend_7((inst >> 15) & 0x7F) * 16;
-            int64_t base = regs[rn];  // rn=31 is SP
-            uint64_t addr = uint64_t(base + offset);
-            vreg_lo[rt] = load64(memory_out, addr);
-            vreg_hi[rt] = load64(memory_out, addr + 8);
-            vreg_lo[rt2_v] = load64(memory_out, addr + 16);
-            vreg_hi[rt2_v] = load64(memory_out, addr + 24);
-        }
-        // STR Dn, [Xm, #imm12*8] — 64-bit FP store (unsigned offset)
-        // Encoding: 0xFD000000 | (imm12 << 10) | (Rn << 5) | Rt
-        else if ((inst & 0xFFC00000) == 0xFD000000) {
-            uint8_t rt = inst & 0x1F;
-            int64_t base = regs[rn];
-            uint64_t addr = uint64_t(base) + (imm12 * 8);
-            store64(memory_out, addr, vreg_lo[rt]);
-        }
-        // LDR Dn, [Xm, #imm12*8] — 64-bit FP load (unsigned offset, zero-ext to 128)
-        // Encoding: 0xFD400000 | (imm12 << 10) | (Rn << 5) | Rt
-        else if ((inst & 0xFFC00000) == 0xFD400000) {
-            uint8_t rt = inst & 0x1F;
-            int64_t base = regs[rn];
-            uint64_t addr = uint64_t(base) + (imm12 * 8);
-            vreg_lo[rt] = load64(memory_out, addr);
-            vreg_hi[rt] = 0;
-        }
-        // STR Sn, [Xm, #imm12*4] — 32-bit FP store (unsigned offset)
-        // Encoding: 0xBD000000 | (imm12 << 10) | (Rn << 5) | Rt
-        else if ((inst & 0xFFC00000) == 0xBD000000) {
-            uint8_t rt = inst & 0x1F;
-            int64_t base = regs[rn];
-            uint64_t addr = uint64_t(base) + (imm12 * 4);
-            store32(memory_out, addr, int32_t(vreg_lo[rt] & 0xFFFFFFFF));
-        }
-        // LDR Sn, [Xm, #imm12*4] — 32-bit FP load (unsigned offset, zero-ext)
-        // Encoding: 0xBD400000 | (imm12 << 10) | (Rn << 5) | Rt
-        else if ((inst & 0xFFC00000) == 0xBD400000) {
-            uint8_t rt = inst & 0x1F;
-            int64_t base = regs[rn];
-            uint64_t addr = uint64_t(base) + (imm12 * 4);
-            vreg_lo[rt] = int64_t(uint32_t(load32(memory_out, addr)));
-            vreg_hi[rt] = 0;
-        }
-        // STP Dn, Dm, [Xn, #imm7*8] — store pair 64-bit FP
-        // Encoding: 0x6D000000 | (imm7 << 15) | (Rt2 << 10) | (Rn << 5) | Rt
-        else if ((inst & 0xFFC00000) == 0x6D000000) {
-            uint8_t rt = inst & 0x1F;
-            uint8_t rt2_v = (inst >> 10) & 0x1F;
-            int32_t offset = sign_extend_7((inst >> 15) & 0x7F) * 8;
-            int64_t base = regs[rn];
-            uint64_t addr = uint64_t(base + offset);
-            store64(memory_out, addr, vreg_lo[rt]);
-            store64(memory_out, addr + 8, vreg_lo[rt2_v]);
-        }
-        // LDP Dn, Dm, [Xn, #imm7*8] — load pair 64-bit FP
-        // Encoding: 0x6D400000 | (imm7 << 15) | (Rt2 << 10) | (Rn << 5) | Rt
-        else if ((inst & 0xFFC00000) == 0x6D400000) {
-            uint8_t rt = inst & 0x1F;
-            uint8_t rt2_v = (inst >> 10) & 0x1F;
-            int32_t offset = sign_extend_7((inst >> 15) & 0x7F) * 8;
-            int64_t base = regs[rn];
-            uint64_t addr = uint64_t(base + offset);
-            vreg_lo[rt] = load64(memory_out, addr);
-            vreg_hi[rt] = 0;
-            vreg_lo[rt2_v] = load64(memory_out, addr + 8);
-            vreg_hi[rt2_v] = 0;
-        }
-
-        // PC-RELATIVE LITERAL LOADS: LDR Wt(0x18)/Xt(0x58)/LDRSW(0x98)/PRFM(0xD8)
-        else if (op_byte == 0x18 || op_byte == 0x58 || op_byte == 0x98 || op_byte == 0xD8) {
-            if (op_byte != 0xD8 && rd != 31) {
-                int32_t offset = sign_extend_19(imm19) * 4;
-                uint64_t addr = uint64_t(int64_t(pc) + offset);
-                if (op_byte == 0x18) regs[rd] = int64_t(load32(memory_out, addr)) & 0xFFFFFFFF;
-                else if (op_byte == 0x58) regs[rd] = load64(memory_out, addr);
-                else regs[rd] = int64_t(int32_t(load32(memory_out, addr)));
-            }
-        }
-
-        // ════════════════════════════════════════════════════════════════════
-        // DEFAULT: Unknown instruction → NOP (continue execution)
-        // ════════════════════════════════════════════════════════════════════
-        // else { /* unrecognized instruction, skip */ }
-
-        // ════════════════════════════════════════════════════════════════════
-        // UPDATE
-        // ════════════════════════════════════════════════════════════════════
+        // Check if ERET requested halt — exit while loop
+        if (halt_break) break;
         if (!branch_taken) {
             pc += 4;
         }
