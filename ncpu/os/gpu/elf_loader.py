@@ -473,7 +473,7 @@ def _pack_stat64(info: dict) -> bytes:
     elif is_dir:
         st_mode = 0o040755
     else:
-        st_mode = 0o100644
+        st_mode = 0o100755
     st_nlink = 2 if is_dir else 1
     st_size = 0 if is_dir else size
     st_blocks = (st_size + 511) // 512
@@ -578,6 +578,7 @@ def make_busybox_syscall_handler(filesystem=None, heap_base=None, stdin_data=Non
     SYS_SYMLINKAT = 36
     SYS_FCHMODAT = 53
     SYS_LINKAT = 37
+    SYS_FCHOWNAT = 54
     SYS_NANOSLEEP = 101
     SYS_CLOCK_NANOSLEEP = 115
     SYS_SCHED_GETAFFINITY = 123
@@ -1002,6 +1003,11 @@ def make_busybox_syscall_handler(filesystem=None, heap_base=None, stdin_data=Non
 
         elif syscall_num == SYS_FCHMODAT:
             # fchmodat(dirfd, path, mode) — stub success
+            cpu.set_register(0, 0)
+            return True
+
+        elif syscall_num in (SYS_FCHOWN, SYS_FCHOWNAT):
+            # fchown/fchownat — stub success (no real ownership)
             cpu.set_register(0, 0)
             return True
 

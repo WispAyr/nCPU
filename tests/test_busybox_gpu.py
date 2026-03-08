@@ -3216,3 +3216,107 @@ class TestCommandFlags:
             sys.stdout = old_stdout
         lines = [l for l in output.strip().split("\n") if l == "GPU"]
         assert len(lines) >= 10
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SED (NON-REGEX) AND ADDITIONAL COMMAND TESTS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@pytest.mark.skipif(not HAS_BUSYBOX, reason="busybox.elf not found")
+class TestSedAndMore:
+    """Test sed with non-regex patterns and additional commands."""
+
+    def _run(self, argv, fs=None, stdin_data=None):
+        import io
+        if fs is None:
+            from ncpu.os.gpu.filesystem import GPUFilesystem
+            fs = GPUFilesystem()
+            fs.mkdir("/tmp")
+        old_stdout = sys.stdout
+        sys.stdout = io.StringIO()
+        try:
+            load_and_run_elf_helper(argv, filesystem=fs, stdin_data=stdin_data)
+            output = sys.stdout.getvalue()
+        finally:
+            sys.stdout = old_stdout
+        return output
+
+    def test_sed_n_p(self):
+        """sed -n p prints all lines."""
+        out = self._run(["sed", "-n", "p"], stdin_data=b"hello\nworld\n")
+        assert "hello" in out and "world" in out
+
+    def test_sed_q(self):
+        """sed q prints first line then quits."""
+        out = self._run(["sed", "q"], stdin_data=b"hello\nworld\n")
+        assert "hello" in out
+        assert "world" not in out
+
+    def test_sed_2q(self):
+        """sed 2q prints first 2 lines then quits."""
+        out = self._run(["sed", "2q"], stdin_data=b"one\ntwo\nthree\n")
+        assert "one" in out and "two" in out
+
+    def test_sed_1d(self):
+        """sed 1d deletes first line."""
+        out = self._run(["sed", "1d"], stdin_data=b"one\ntwo\nthree\n")
+        assert "one" not in out
+        assert "two" in out and "three" in out
+
+    def test_chown_stub(self):
+        """chown should succeed (stub) without errors."""
+        from ncpu.os.gpu.filesystem import GPUFilesystem
+        fs = GPUFilesystem()
+        fs.mkdir("/tmp")
+        fs.write_file("/tmp/f.txt", b"data\n")
+        out = self._run(["chown", "0:0", "/tmp/f.txt"], fs)
+        assert "Permission denied" not in out
+        assert "not permitted" not in out.lower()
+
+    def test_grep_F_file(self):
+        """grep -F searches in files."""
+        from ncpu.os.gpu.filesystem import GPUFilesystem
+        fs = GPUFilesystem()
+        fs.mkdir("/tmp")
+        fs.write_file("/tmp/data.txt", b"apple pie\nbanana split\ncherry tart\n")
+        out = self._run(["grep", "-F", "banana", "/tmp/data.txt"], fs)
+        assert "banana split" in out
+
+    def test_sort_file(self):
+        """sort works on files."""
+        from ncpu.os.gpu.filesystem import GPUFilesystem
+        fs = GPUFilesystem()
+        fs.mkdir("/tmp")
+        fs.write_file("/tmp/nums.txt", b"3\n1\n2\n")
+        out = self._run(["sort", "/tmp/nums.txt"], fs)
+        lines = [l for l in out.strip().split("\n") if l]
+        assert lines == ["1", "2", "3"]
+
+    def test_head_file(self):
+        """head reads first lines of a file."""
+        from ncpu.os.gpu.filesystem import GPUFilesystem
+        fs = GPUFilesystem()
+        fs.mkdir("/tmp")
+        fs.write_file("/tmp/lines.txt", b"a\nb\nc\nd\ne\n")
+        out = self._run(["head", "-n", "3", "/tmp/lines.txt"], fs)
+        assert "a" in out and "b" in out and "c" in out
+
+    def test_tail_file(self):
+        """tail reads last lines of a file."""
+        from ncpu.os.gpu.filesystem import GPUFilesystem
+        fs = GPUFilesystem()
+        fs.mkdir("/tmp")
+        fs.write_file("/tmp/lines.txt", b"a\nb\nc\nd\ne\n")
+        out = self._run(["tail", "-n", "2", "/tmp/lines.txt"], fs)
+        assert "d" in out and "e" in out
+
+    def test_find_name(self):
+        """find -name searches filesystem."""
+        from ncpu.os.gpu.filesystem import GPUFilesystem
+        fs = GPUFilesystem()
+        fs.mkdir("/tmp")
+        fs.mkdir("/tmp/sub")
+        fs.write_file("/tmp/a.txt", b"a\n")
+        fs.write_file("/tmp/sub/b.txt", b"b\n")
+        out = self._run(["find", "/tmp", "-name", "*.txt"], fs)
+        assert "a.txt" in out

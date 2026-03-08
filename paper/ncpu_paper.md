@@ -12,7 +12,7 @@ We present nCPU, an end-to-end AI computer in which every layer of the computati
 
 The neural ALU achieves 100% accuracy on 32-bit integer arithmetic via memorization-by-decomposition: operations are broken into sub-problems with exhaustively trainable input spaces. This yields a counterintuitive finding: neural multiplication (21 us) is 12x faster than neural addition (248 us), inverting the conventional performance hierarchy. The neural OS (neurOS) implements 11 components --- MMU, TLB, cache, scheduler, assembler, compiler, watchdog --- as trained models with 93.7-100% accuracy and zero fallback paths. The GPU compute layer executes 135+ ARM64 instructions at ~4M IPS via Metal shaders, hosts a 25-command UNIX shell with fork/wait/pipe/dup2 multi-process support, runs a ~4,200-line self-hosting C compiler (73/73 test programs, self-compilation verified), loads real BusyBox (321KB, 34+ applets) and boots Alpine Linux v3.20 on the GPU with GPU-side syscall buffering for performance, and proves Turing completeness via a 2-instruction MUXLEQ VM running eForth with neural arithmetic.
 
-The system comprises 24 trained models, 1,203 tests across 17 files with exhaustive formal verification, and demonstrates that a single GPU can host a complete, self-contained computational stack from silicon to shell.
+The system comprises 24 trained models, 1,213 tests across 17 files with exhaustive formal verification, and demonstrates that a single GPU can host a complete, self-contained computational stack from silicon to shell.
 
 ## 1. Introduction
 
