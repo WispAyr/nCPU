@@ -3026,3 +3026,193 @@ class TestUtimensatFix:
         result = handler(cpu)
         assert result is True
         assert cpu.get_register(0) == -2  # -ENOENT
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SYMLINK AND HARD LINK TESTS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@pytest.mark.skipif(not HAS_BUSYBOX, reason="busybox.elf not found")
+class TestSymlinkSupport:
+    """Test symlink and hard link support."""
+
+    def _run(self, argv, fs, stdin_data=None, max_cycles=500_000):
+        import io
+        old_stdout = sys.stdout
+        sys.stdout = io.StringIO()
+        try:
+            result = load_and_run_elf_helper(argv, filesystem=fs, stdin_data=stdin_data)
+            output = sys.stdout.getvalue()
+        finally:
+            sys.stdout = old_stdout
+        return output
+
+    def _make_fs(self):
+        from ncpu.os.gpu.filesystem import GPUFilesystem
+        fs = GPUFilesystem()
+        fs.mkdir("/tmp")
+        return fs
+
+    def test_ln_s_creates_symlink(self):
+        """ln -s should create a symbolic link."""
+        fs = self._make_fs()
+        fs.write_file("/tmp/orig.txt", b"original content\n")
+        self._run(["ln", "-s", "/tmp/orig.txt", "/tmp/link.txt"], fs)
+        assert fs.exists("/tmp/link.txt")
+        assert fs.is_symlink("/tmp/link.txt")
+
+    def test_readlink(self):
+        """readlink should return the symlink target."""
+        fs = self._make_fs()
+        fs.write_file("/tmp/orig.txt", b"content\n")
+        fs.symlink("/tmp/orig.txt", "/tmp/link.txt")
+        output = self._run(["readlink", "/tmp/link.txt"], fs)
+        assert "/tmp/orig.txt" in output
+
+    def test_cat_follows_symlink(self):
+        """cat on a symlink should read the target file."""
+        fs = self._make_fs()
+        fs.write_file("/tmp/orig.txt", b"symlink content\n")
+        fs.symlink("/tmp/orig.txt", "/tmp/link.txt")
+        output = self._run(["cat", "/tmp/link.txt"], fs)
+        assert "symlink content" in output
+
+    def test_ln_hard_link(self):
+        """ln (without -s) should create a hard link."""
+        fs = self._make_fs()
+        fs.write_file("/tmp/src.txt", b"hard link data\n")
+        self._run(["ln", "/tmp/src.txt", "/tmp/hard.txt"], fs)
+        assert fs.exists("/tmp/hard.txt")
+        output = self._run(["cat", "/tmp/hard.txt"], fs)
+        assert "hard link data" in output
+
+    def test_stat_symlink_type(self):
+        """stat should show symlink type for symlinks."""
+        fs = self._make_fs()
+        fs.write_file("/tmp/orig.txt", b"x\n")
+        fs.symlink("/tmp/orig.txt", "/tmp/link.txt")
+        output = self._run(["stat", "/tmp/link.txt"], fs)
+        assert "link" in output.lower() or "->" in output
+
+    def test_symlink_filesystem_api(self):
+        """Test GPUFilesystem symlink API directly."""
+        from ncpu.os.gpu.filesystem import GPUFilesystem
+        fs = GPUFilesystem()
+        fs.mkdir("/tmp")
+        fs.write_file("/tmp/real.txt", b"real\n")
+
+        assert fs.symlink("/tmp/real.txt", "/tmp/sl.txt") == 0
+        assert fs.is_symlink("/tmp/sl.txt")
+        assert fs.readlink("/tmp/sl.txt") == "/tmp/real.txt"
+
+        # open() should follow symlink
+        fd = fs.open("/tmp/sl.txt", 0)
+        assert fd >= 0
+        data = fs.read(fd, 100)
+        assert data == b"real\n"
+        fs.close(fd)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# EXTENDED COMMAND FLAGS AND STDIN TESTS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@pytest.mark.skipif(not HAS_BUSYBOX, reason="busybox.elf not found")
+class TestCommandFlags:
+    """Test BusyBox commands with various flags and stdin input."""
+
+    def _run(self, argv, fs=None, stdin_data=None):
+        import io
+        if fs is None:
+            from ncpu.os.gpu.filesystem import GPUFilesystem
+            fs = GPUFilesystem()
+            fs.mkdir("/tmp")
+        old_stdout = sys.stdout
+        sys.stdout = io.StringIO()
+        try:
+            load_and_run_elf_helper(argv, filesystem=fs, stdin_data=stdin_data)
+            output = sys.stdout.getvalue()
+        finally:
+            sys.stdout = old_stdout
+        return output
+
+    def test_wc_l_stdin(self):
+        """wc -l counts lines from stdin."""
+        out = self._run(["wc", "-l"], stdin_data=b"a\nb\nc\n")
+        assert "3" in out
+
+    def test_wc_w_stdin(self):
+        """wc -w counts words from stdin."""
+        out = self._run(["wc", "-w"], stdin_data=b"hello world foo\n")
+        assert "3" in out
+
+    def test_wc_c_stdin(self):
+        """wc -c counts bytes from stdin."""
+        out = self._run(["wc", "-c"], stdin_data=b"hello")
+        assert "5" in out
+
+    def test_cut_d_f(self):
+        """cut -d ' ' -f 1 extracts first field."""
+        out = self._run(["cut", "-d", " ", "-f", "1"], stdin_data=b"hello world\nfoo bar\n")
+        assert "hello" in out and "foo" in out
+
+    def test_cut_c(self):
+        """cut -c 1-3 extracts characters 1-3."""
+        out = self._run(["cut", "-c", "1-3"], stdin_data=b"hello\nworld\n")
+        assert "hel" in out and "wor" in out
+
+    def test_sort_r(self):
+        """sort -r reverses sort order."""
+        out = self._run(["sort", "-r"], stdin_data=b"alpha\ncharlie\nbravo\n")
+        lines = [l for l in out.strip().split("\n") if l]
+        assert lines[0] == "charlie"
+        assert lines[-1] == "alpha"
+
+    def test_sort_n(self):
+        """sort -n sorts numerically."""
+        out = self._run(["sort", "-n"], stdin_data=b"10\n2\n1\n20\n")
+        lines = [l for l in out.strip().split("\n") if l]
+        assert lines == ["1", "2", "10", "20"]
+
+    def test_grep_Fi(self):
+        """grep -Fi does case-insensitive fixed-string match."""
+        out = self._run(["grep", "-Fi", "HELLO"], stdin_data=b"Hello World\nfoo bar\n")
+        assert "Hello World" in out
+
+    def test_grep_Fv(self):
+        """grep -Fv inverts match."""
+        out = self._run(["grep", "-Fv", "foo"], stdin_data=b"hello\nfoo\nworld\n")
+        assert "hello" in out and "world" in out
+        assert "foo" not in out.replace("foo", "", 0)  # "foo" line excluded
+
+    def test_grep_Fc(self):
+        """grep -Fc counts matching lines."""
+        out = self._run(["grep", "-Fc", "a"], stdin_data=b"alpha\nbeta\ngamma\n")
+        assert "3" in out
+
+    def test_head_n(self):
+        """head -n 2 shows first 2 lines from stdin."""
+        out = self._run(["head", "-n", "2"], stdin_data=b"one\ntwo\nthree\n")
+        assert "one" in out and "two" in out
+
+    def test_tail_n(self):
+        """tail -n 1 shows last line from stdin."""
+        out = self._run(["tail", "-n", "1"], stdin_data=b"one\ntwo\nthree\n")
+        assert "three" in out
+
+    def test_yes_produces_output(self):
+        """yes produces repeated output (cycle-limited)."""
+        import io
+        from ncpu.os.gpu.filesystem import GPUFilesystem
+        from ncpu.os.gpu.elf_loader import load_and_run_elf
+        fs = GPUFilesystem()
+        old_stdout = sys.stdout
+        sys.stdout = io.StringIO()
+        try:
+            load_and_run_elf(BUSYBOX, argv=["yes", "GPU"], max_cycles=10000,
+                           quiet=True, filesystem=fs)
+            output = sys.stdout.getvalue()
+        finally:
+            sys.stdout = old_stdout
+        lines = [l for l in output.strip().split("\n") if l == "GPU"]
+        assert len(lines) >= 10

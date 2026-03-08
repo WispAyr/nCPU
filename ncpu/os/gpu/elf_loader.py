@@ -463,11 +463,17 @@ def _pack_stat64(info: dict) -> bytes:
         120: __unused4  (int32)     124: __unused5   (int32)
     """
     is_dir = info.get("type") == "dir"
+    is_link = info.get("type") == "symlink"
     size = info.get("size", 0)
     path = info.get("path", "/")
 
     st_ino = hash(path) & 0xFFFFFFFFFFFFFFFF
-    st_mode = 0o040755 if is_dir else 0o100644
+    if is_link:
+        st_mode = 0o120777
+    elif is_dir:
+        st_mode = 0o040755
+    else:
+        st_mode = 0o100644
     st_nlink = 2 if is_dir else 1
     st_size = 0 if is_dir else size
     st_blocks = (st_size + 511) // 512
@@ -571,6 +577,7 @@ def make_busybox_syscall_handler(filesystem=None, heap_base=None, stdin_data=Non
     SYS_SYSINFO = 179
     SYS_SYMLINKAT = 36
     SYS_FCHMODAT = 53
+    SYS_LINKAT = 37
     SYS_NANOSLEEP = 101
     SYS_CLOCK_NANOSLEEP = 115
     SYS_SCHED_GETAFFINITY = 123
@@ -822,7 +829,21 @@ def make_busybox_syscall_handler(filesystem=None, heap_base=None, stdin_data=Non
             return True
 
         elif syscall_num == SYS_READLINKAT:
-            cpu.set_register(0, -22)  # -EINVAL (no symlinks)
+            # readlinkat(dirfd, pathname, buf, bufsiz)
+            x1 = cpu.get_register(1)
+            x2 = cpu.get_register(2)
+            x3 = cpu.get_register(3)
+            if x1 and filesystem:
+                path = read_string_from_gpu(cpu, x1)
+                target = filesystem.readlink(path)
+                if target:
+                    target_bytes = target.encode('utf-8')[:x3]
+                    cpu.write_memory(x2, target_bytes)
+                    cpu.set_register(0, len(target_bytes))
+                else:
+                    cpu.set_register(0, -22)  # -EINVAL (not a symlink)
+            else:
+                cpu.set_register(0, -22)  # -EINVAL
             return True
 
         elif syscall_num == SYS_FACCESSAT:
@@ -985,8 +1006,32 @@ def make_busybox_syscall_handler(filesystem=None, heap_base=None, stdin_data=Non
             return True
 
         elif syscall_num == SYS_SYMLINKAT:
-            # symlinkat(target, newdirfd, linkpath) — stub EPERM
-            cpu.set_register(0, -1)  # -EPERM
+            # symlinkat(target, newdirfd, linkpath)
+            x0 = cpu.get_register(0)
+            x2 = cpu.get_register(2)
+            if filesystem and x0 and x2:
+                target = read_string_from_gpu(cpu, x0)
+                link_path = read_string_from_gpu(cpu, x2)
+                result = filesystem.symlink(target, link_path)
+                cpu.set_register(0, result if result == 0 else -1)
+            else:
+                cpu.set_register(0, -1)  # -EPERM
+            return True
+
+        elif syscall_num == SYS_LINKAT:
+            # linkat(olddirfd, oldpath, newdirfd, newpath, flags)
+            # Hard links: copy file content under new path
+            if filesystem and x1 and x3:
+                old_path = read_string_from_gpu(cpu, x1)
+                new_path = read_string_from_gpu(cpu, x3)
+                old_resolved = filesystem.resolve_path(old_path)
+                if old_resolved in filesystem.files:
+                    filesystem.files[filesystem.resolve_path(new_path)] = filesystem.files[old_resolved]
+                    cpu.set_register(0, 0)
+                else:
+                    cpu.set_register(0, -2)  # -ENOENT
+            else:
+                cpu.set_register(0, -1)  # -EPERM
             return True
 
         elif syscall_num in (SYS_NANOSLEEP, SYS_CLOCK_NANOSLEEP):

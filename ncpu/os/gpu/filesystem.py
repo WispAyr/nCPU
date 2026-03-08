@@ -161,9 +161,21 @@ class GPUFilesystem:
             fd += 1
         return fd if fd < MAX_FD else -1
 
+    def _follow_symlink(self, path: str, depth: int = 0) -> str:
+        """Follow symlinks, returning the final target path. Max 8 hops."""
+        if depth > 8:
+            return path  # Prevent symlink loops
+        if hasattr(self, 'symlinks') and path in self.symlinks:
+            target = self.symlinks[path]
+            resolved = self.resolve_path(target)
+            return self._follow_symlink(resolved, depth + 1)
+        return path
+
     def open(self, path: str, flags: int) -> int:
         """Open a file or directory, return fd or -1."""
         path = self.resolve_path(path)
+        # Follow symlinks for open (except O_NOFOLLOW)
+        path = self._follow_symlink(path)
 
         fd = self._allocate_fd()
         if fd < 0:
@@ -307,7 +319,9 @@ class GPUFilesystem:
     def stat(self, path: str) -> Optional[dict]:
         """Stat a file or directory."""
         path = self.resolve_path(path)
-        if path in self.files:
+        if self.is_symlink(path):
+            return {"type": "symlink", "size": len(self.files.get(path, b"")), "path": path}
+        elif path in self.files:
             return {"type": "file", "size": len(self.files[path]), "path": path}
         elif path in self.directories:
             return {"type": "dir", "size": 0, "path": path}
@@ -433,6 +447,38 @@ class GPUFilesystem:
                     entries.add(name)
 
         return sorted(entries)
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # SYMLINK SUPPORT
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def symlink(self, target: str, link_path: str) -> int:
+        """Create a symbolic link at link_path pointing to target. Returns 0 or -1."""
+        link_path = self.resolve_path(link_path)
+        if link_path in self.files or link_path in self.directories:
+            return -1  # EEXIST
+        parent = self._parent_dir(link_path)
+        if parent != "/" and parent not in self.directories:
+            return -1  # ENOENT
+        # Store symlink as a special file with target stored separately
+        if not hasattr(self, 'symlinks'):
+            self.symlinks = {}
+        self.symlinks[link_path] = target
+        # Also store as a file so it shows up in listings and stat
+        self.files[link_path] = target.encode('utf-8')
+        return 0
+
+    def readlink(self, path: str) -> Optional[str]:
+        """Read the target of a symbolic link. Returns target string or None."""
+        path = self.resolve_path(path)
+        if hasattr(self, 'symlinks') and path in self.symlinks:
+            return self.symlinks[path]
+        return None
+
+    def is_symlink(self, path: str) -> bool:
+        """Check if a path is a symbolic link."""
+        path = self.resolve_path(path)
+        return hasattr(self, 'symlinks') and path in self.symlinks
 
     # ═══════════════════════════════════════════════════════════════════════
     # CONVENIENCE
