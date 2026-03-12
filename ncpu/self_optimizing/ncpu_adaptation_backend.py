@@ -9,7 +9,65 @@ from typing import Any, Optional
 
 import numpy as np
 
-from ncpu.os.gpu.protocols.gradient_aware_network import CompressionType, GradientCompressor
+try:
+    from ncpu.os.gpu.protocols.gradient_aware_network import CompressionType, GradientCompressor
+except (ImportError, ModuleNotFoundError):
+    # Fallback when deployed without the full ncpu/os tree (e.g. remote training servers)
+    from enum import Enum
+
+    class CompressionType(Enum):
+        NONE = "none"
+        QUANTIZATION = "quantization"
+        TOP_K = "top_k"
+        RANDOM_K = "random_k"
+        DWAL = "dwal"
+        POWER_SGD = "power_sgd"
+        AUTO = "auto"
+
+    class _GradientDescriptor:
+        __slots__ = (
+            "name", "shape", "dtype", "size_bytes", "compression",
+            "compression_ratio", "nonzero_indices", "nonzero_values",
+            "scale", "zero_point",
+        )
+        def __init__(self, **kw: Any):
+            for k in self.__slots__:
+                setattr(self, k, kw.get(k))
+
+    class GradientCompressor:
+        def __init__(self, compression_type: CompressionType = CompressionType.AUTO):
+            self.compression_type = compression_type
+
+        def compress(self, gradient: np.ndarray, spec: dict) -> "_GradientDescriptor":
+            if self.compression_type == CompressionType.TOP_K:
+                flat = gradient.flatten()
+                k = max(1, int(len(flat) * spec.get("k_ratio", 0.01)))
+                indices = np.argpartition(np.abs(flat), -k)[-k:]
+                values = flat[indices]
+                return _GradientDescriptor(
+                    name=spec.get("name", "grad"), shape=gradient.shape,
+                    dtype=0, size_bytes=indices.nbytes + values.nbytes,
+                    compression=CompressionType.TOP_K,
+                    compression_ratio=gradient.nbytes / (indices.nbytes + values.nbytes),
+                    nonzero_indices=indices, nonzero_values=values,
+                )
+            if self.compression_type == CompressionType.QUANTIZATION:
+                bits = spec.get("bits", 8)
+                mx = gradient.max()
+                scale = mx / (2 ** (bits - 1)) if mx else 1.0
+                quantized = np.round(gradient / scale).astype(np.int8)
+                return _GradientDescriptor(
+                    name=spec.get("name", "grad"), shape=gradient.shape,
+                    dtype=5, size_bytes=quantized.nbytes,
+                    compression=CompressionType.QUANTIZATION,
+                    compression_ratio=gradient.nbytes / quantized.nbytes,
+                    scale=float(scale), zero_point=0,
+                )
+            return _GradientDescriptor(
+                name=spec.get("name", "grad"), shape=gradient.shape,
+                dtype=0, size_bytes=gradient.nbytes,
+                compression=CompressionType.NONE, compression_ratio=1.0,
+            )
 
 
 @dataclass
