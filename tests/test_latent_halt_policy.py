@@ -38,10 +38,12 @@ class TestLatentHaltPolicy(unittest.TestCase):
         )
 
         self.assertEqual(summary["allowed_actions"], ["continue", "fail"])
-        self.assertEqual(vector[17], 1.0)  # continue
-        self.assertEqual(vector[18], 0.0)  # commit
-        self.assertEqual(vector[19], 1.0)  # fail
+        indices = summary["action_flag_indices"]
+        self.assertEqual(vector[indices["continue"]], 1.0)
+        self.assertEqual(vector[indices["commit"]], 0.0)
+        self.assertEqual(vector[indices["fail"]], 1.0)
         self.assertEqual(len(summary["memory_projection"]), 4)
+        self.assertGreater(len(summary["memory_features"]), 4)
 
     def test_policy_prefers_commit_on_success(self):
         policy = LatentHaltPolicy()

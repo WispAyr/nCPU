@@ -17,7 +17,7 @@ from ncpu.self_optimizing.latent_controller_state import LatentControllerState
 class LatentDescriptorHeadConfig:
     """Configuration for a learned latent-state descriptor head."""
 
-    numeric_feature_count: int = 24
+    numeric_feature_count: int = 32
     hash_bucket_count: int = 16
     hidden_dim: int = 64
     output_dim: int = 16
@@ -42,6 +42,7 @@ def encode_latent_descriptor_features(
     """Encode latent controller state for learned descriptor generation."""
     resolved = config or LatentDescriptorHeadConfig()
     vector = [0.0] * resolved.input_dim
+    memory_features = latent_state.memory_feature_vector(width=8, include_stats=True)
     numeric_values = [
         float(latent_state.confidence),
         min(latent_state.verification_passes / 8.0, 1.0),
@@ -63,7 +64,7 @@ def encode_latent_descriptor_features(
         1.0 if "plan" in update_kind else 0.0,
         1.0 if "repair" in update_kind else 0.0,
         1.0 if latent_state.active_strategy else 0.0,
-        *latent_state.memory_projection(width=4),
+        *memory_features,
     ]
     for index, value in enumerate(numeric_values):
         vector[index] = value
@@ -93,11 +94,17 @@ def encode_latent_descriptor_features(
 
     summary = {
         "update_kind": update_kind,
+        "event_flag_indices": {
+            "verify_failure": 16,
+            "plan": 17,
+            "repair": 18,
+        },
         "confidence": float(latent_state.confidence),
         "verification_passes": int(latent_state.verification_passes),
         "verification_failures": int(latent_state.verification_failures),
         "recent_actions": list(latent_state.recent_actions[-4:]),
         "memory_projection": latent_state.memory_projection(width=4),
+        "memory_features": memory_features,
     }
     return vector, summary
 

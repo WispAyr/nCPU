@@ -54,6 +54,8 @@ Current learned or learnable hidden modules:
 - latent memory head
 - state patch head
 
+The current runtime now conditions those heads on a richer recurrent-memory feature vector, not just a tiny pooled memory summary. That matters because the controller is starting to use learned hidden state more directly when choosing actions, halting, and weight-update behavior.
+
 These are trained from JSONL trajectories captured during hidden SOME runs.
 
 ### Task-Local Fast Weights

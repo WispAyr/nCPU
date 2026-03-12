@@ -36,11 +36,13 @@ class TestLatentActionPolicy(unittest.TestCase):
 
         self.assertGreater(len(vector), 24)
         self.assertEqual(summary["allowed_actions"], ["patch", "think", "fail"])
-        self.assertEqual(vector[19], 1.0)  # think
-        self.assertEqual(vector[20], 0.0)  # write
-        self.assertEqual(vector[21], 1.0)  # patch
-        self.assertEqual(vector[23], 1.0)  # fail
+        indices = summary["action_flag_indices"]
+        self.assertEqual(vector[indices["think"]], 1.0)
+        self.assertEqual(vector[indices["write"]], 0.0)
+        self.assertEqual(vector[indices["patch"]], 1.0)
+        self.assertEqual(vector[indices["fail"]], 1.0)
         self.assertEqual(len(summary["memory_projection"]), 4)
+        self.assertGreater(len(summary["memory_features"]), 4)
 
     def test_policy_prefers_think_then_patch(self):
         policy = LatentActionPolicy()

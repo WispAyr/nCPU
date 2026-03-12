@@ -29,7 +29,7 @@ LATENT_MEMORY_EVENT_LABELS = (
 class LatentMemoryHeadConfig:
     """Configuration for a learned recurrent latent-memory updater."""
 
-    numeric_feature_count: int = 32
+    numeric_feature_count: int = 40
     hash_bucket_count: int = 16
     hidden_dim: int = 64
     output_dim: int = 16
@@ -64,6 +64,7 @@ def encode_latent_memory_features(
     generation_attempts = int(getattr(workspace, "generation_attempts", 0) or 0)
     remaining_attempts = max(max_attempts - generation_attempts, 0)
     status = str(getattr(workspace, "status", "running") or "running")
+    memory_features = latent_state.memory_feature_vector(width=8, include_stats=True)
 
     numeric_values = [
         float(latent_state.confidence),
@@ -94,7 +95,7 @@ def encode_latent_memory_features(
         _event_flag(event_kind, "descriptor_update"),
         _event_flag(event_kind, "commit"),
         _event_flag(event_kind, "fail"),
-        *latent_state.memory_projection(width=4),
+        *memory_features,
     ]
     for index, value in enumerate(numeric_values):
         vector[index] = value
@@ -124,12 +125,23 @@ def encode_latent_memory_features(
 
     summary = {
         "event_kind": event_kind,
+        "event_flag_indices": {
+            "think": 20,
+            "write": 21,
+            "patch": 22,
+            "verify": 23,
+            "fast_weight_update": 24,
+            "descriptor_update": 25,
+            "commit": 26,
+            "fail": 27,
+        },
         "status": status,
         "generation_attempts": generation_attempts,
         "remaining_attempts": remaining_attempts,
         "success": success,
         "confidence": float(latent_state.confidence),
         "memory_projection": latent_state.memory_projection(width=4),
+        "memory_features": memory_features,
     }
     return vector, summary
 

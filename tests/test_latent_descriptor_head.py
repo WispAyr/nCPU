@@ -29,7 +29,8 @@ class TestLatentDescriptorHead(unittest.TestCase):
 
         self.assertGreater(len(vector), 24)
         self.assertEqual(summary["update_kind"], "verify_failure_descriptor")
-        self.assertEqual(vector[16], 1.0)
+        self.assertEqual(vector[summary["event_flag_indices"]["verify_failure"]], 1.0)
+        self.assertGreater(len(summary["memory_features"]), 4)
 
     def test_generator_without_head_returns_zero_projection(self):
         state = LatentControllerState(hidden_plan="Use recursion.")

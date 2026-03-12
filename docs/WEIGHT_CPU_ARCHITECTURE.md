@@ -135,6 +135,8 @@ The repo now has a first concrete implementation of this idea:
 - `latent_memory_head.py`
   - learns recurrent memory deltas from hidden-controller event streams
   - lets hidden inference update a learned memory vector instead of rebuilding everything from textual state
+- latent control heads now consume richer memory context, not just a 4-value pooled summary
+  - action, halt, descriptor, and memory-update decisions all see an expanded recurrent-memory feature vector plus memory statistics
 - `latent_descriptor_head.py`
   - learns latent-state-to-descriptor projections for weight updates
 - `state_patch_head.py`

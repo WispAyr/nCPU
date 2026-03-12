@@ -25,6 +25,7 @@ class TestLatentControllerState(unittest.TestCase):
         self.assertNotEqual(state.memory_vector, baseline)
         self.assertGreaterEqual(state.memory_updates, 4)
         self.assertEqual(len(state.memory_projection(width=4)), 4)
+        self.assertEqual(len(state.memory_feature_vector(width=8, include_stats=True)), 12)
 
     def test_prompt_summary_mentions_latent_memory(self):
         state = LatentControllerState()

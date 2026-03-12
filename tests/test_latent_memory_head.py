@@ -39,8 +39,9 @@ class TestLatentMemoryHead(unittest.TestCase):
 
         self.assertGreater(len(vector), 32)
         self.assertEqual(summary["event_kind"], "verify")
-        self.assertEqual(vector[23], 1.0)  # verify
+        self.assertEqual(vector[summary["event_flag_indices"]["verify"]], 1.0)
         self.assertEqual(len(summary["memory_projection"]), 4)
+        self.assertGreater(len(summary["memory_features"]), 4)
 
     def test_updater_without_head_returns_zero_delta(self):
         workspace = HiddenWorkspace(

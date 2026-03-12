@@ -20,7 +20,7 @@ LATENT_ACTION_LABELS = ("think", "write", "patch", "commit", "fail")
 class LatentActionHeadConfig:
     """Configuration for the latent action-selection head."""
 
-    numeric_feature_count: int = 28
+    numeric_feature_count: int = 36
     hash_bucket_count: int = 16
     hidden_dim: int = 64
     dropout: float = 0.0
@@ -72,6 +72,7 @@ def encode_latent_action_features(
     status = str(getattr(workspace, "status", "running") or "running")
     candidate_solution = str(getattr(workspace, "candidate_solution", "") or "")
     last_error = str(getattr(workspace, "last_error", "") or "")
+    memory_features = latent_state.memory_feature_vector(width=8, include_stats=True)
 
     numeric_values = [
         float(latent_state.confidence),
@@ -98,7 +99,7 @@ def encode_latent_action_features(
         1.0 if "patch" in allowed_actions else 0.0,
         1.0 if "commit" in allowed_actions else 0.0,
         1.0 if "fail" in allowed_actions else 0.0,
-        *latent_state.memory_projection(width=4),
+        *memory_features,
     ]
     for index, value in enumerate(numeric_values):
         vector[index] = value
@@ -129,10 +130,18 @@ def encode_latent_action_features(
         "remaining_attempts": remaining_attempts,
         "status": status,
         "allowed_actions": list(allowed_actions),
+        "action_flag_indices": {
+            "think": 19,
+            "write": 20,
+            "patch": 21,
+            "commit": 22,
+            "fail": 23,
+        },
         "confidence": float(latent_state.confidence),
         "failure_patterns": list(latent_state.failure_patterns[-4:]),
         "recent_actions": list(latent_state.recent_actions[-6:]),
         "memory_projection": latent_state.memory_projection(width=4),
+        "memory_features": memory_features,
     }
     return vector, summary
 

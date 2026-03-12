@@ -439,7 +439,12 @@ class LLMProviderFactory:
                 )
             ):
                 latent_descriptor_head_config = LatentDescriptorHeadConfig(
-                    numeric_feature_count=int(kwargs.pop("latent_descriptor_head_numeric_feature_count", 20)),
+                    numeric_feature_count=int(
+                        kwargs.pop(
+                            "latent_descriptor_head_numeric_feature_count",
+                            LatentDescriptorHeadConfig().numeric_feature_count,
+                        )
+                    ),
                     hash_bucket_count=int(kwargs.pop("latent_descriptor_head_hash_bucket_count", 16)),
                     hidden_dim=int(kwargs.pop("latent_descriptor_head_hidden_dim", 64)),
                     output_dim=int(kwargs.pop("latent_descriptor_head_output_dim", 16)),

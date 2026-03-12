@@ -98,6 +98,26 @@ class LatentControllerState:
             pooled.extend([0.0] * (width - len(pooled)))
         return pooled[:width]
 
+    def memory_feature_vector(
+        self,
+        *,
+        width: int = 8,
+        include_stats: bool = True,
+    ) -> list[float]:
+        self._ensure_memory_width()
+        pooled = self.memory_projection(width=width)
+        if not include_stats:
+            return pooled
+
+        if not self.memory_vector:
+            return pooled + [0.0, 0.0, 0.0, 0.0]
+
+        mean_value = sum(self.memory_vector) / len(self.memory_vector)
+        mean_abs = sum(abs(value) for value in self.memory_vector) / len(self.memory_vector)
+        max_abs = max(abs(value) for value in self.memory_vector)
+        update_norm = min(self.memory_updates / 16.0, 1.0)
+        return pooled + [mean_value, mean_abs, max_abs, update_norm]
+
     def record_action(self, action: str) -> None:
         self.recent_actions.append(action)
         if len(self.recent_actions) > 8:

@@ -20,7 +20,7 @@ LATENT_HALT_LABELS = ("continue", "commit", "fail")
 class LatentHaltHeadConfig:
     """Configuration for the latent halt/commit head."""
 
-    numeric_feature_count: int = 24
+    numeric_feature_count: int = 32
     hash_bucket_count: int = 12
     hidden_dim: int = 48
     dropout: float = 0.0
@@ -65,6 +65,7 @@ def encode_latent_halt_features(
     status = str(getattr(workspace, "status", "running") or "running")
     candidate_solution = str(getattr(workspace, "candidate_solution", "") or "")
     last_error = str(verification_error or getattr(workspace, "last_error", "") or "")
+    memory_features = latent_state.memory_feature_vector(width=8, include_stats=True)
 
     numeric_values = [
         float(latent_state.confidence),
@@ -87,7 +88,7 @@ def encode_latent_halt_features(
         1.0 if "continue" in allowed_actions else 0.0,
         1.0 if "commit" in allowed_actions else 0.0,
         1.0 if "fail" in allowed_actions else 0.0,
-        *latent_state.memory_projection(width=4),
+        *memory_features,
     ]
     for index, value in enumerate(numeric_values):
         vector[index] = value
@@ -117,10 +118,16 @@ def encode_latent_halt_features(
         "generation_attempts": generation_attempts,
         "remaining_attempts": remaining_attempts,
         "allowed_actions": list(allowed_actions),
+        "action_flag_indices": {
+            "continue": 17,
+            "commit": 18,
+            "fail": 19,
+        },
         "confidence": float(latent_state.confidence),
         "status": status,
         "failure_patterns": list(latent_state.failure_patterns[-4:]),
         "memory_projection": latent_state.memory_projection(width=4),
+        "memory_features": memory_features,
     }
     return vector, summary
 
