@@ -1,0 +1,4868 @@
+{
+  "models": {
+    "4B": {
+      "comparison": {
+        "rows": [
+          {
+            "avg_attempts": 1.0,
+            "coding_success_rate": 1.0,
+            "condition": "1_baseline",
+            "delta_from_baseline": 0.0,
+            "description": "Single attempt, no SOME",
+            "marginal_delta": 0.0,
+            "reasoning_success_rate": 0.6,
+            "success_rate": 0.8,
+            "wall_clock_seconds": 499.6851826068014
+          },
+          {
+            "avg_attempts": 1.6,
+            "coding_success_rate": 1.0,
+            "condition": "2_verify_only",
+            "delta_from_baseline": 0.0,
+            "description": "Retry loop (4 attempts), no planning/heads/memory/weights",
+            "marginal_delta": 0.0,
+            "reasoning_success_rate": 0.6,
+            "success_rate": 0.8,
+            "wall_clock_seconds": 744.782957252115
+          },
+          {
+            "avg_attempts": 1.5,
+            "coding_success_rate": 1.0,
+            "condition": "3_verify_plan",
+            "delta_from_baseline": 0.09999999999999998,
+            "description": "Retry + planning, no heads/memory/weights",
+            "marginal_delta": 0.09999999999999998,
+            "reasoning_success_rate": 0.8,
+            "success_rate": 0.9,
+            "wall_clock_seconds": 1116.032813807018
+          },
+          {
+            "avg_attempts": 1.5,
+            "coding_success_rate": 1.0,
+            "condition": "4_verify_plan_heads",
+            "delta_from_baseline": 0.09999999999999998,
+            "description": "Retry + planning + learned action/halt heads",
+            "marginal_delta": 0.0,
+            "reasoning_success_rate": 0.8,
+            "success_rate": 0.9,
+            "wall_clock_seconds": 1119.3972598323599
+          },
+          {
+            "avg_attempts": 1.5,
+            "coding_success_rate": 1.0,
+            "condition": "5_verify_plan_heads_memory",
+            "delta_from_baseline": 0.09999999999999998,
+            "description": "Retry + planning + heads + recurrent memory",
+            "marginal_delta": 0.0,
+            "reasoning_success_rate": 0.8,
+            "success_rate": 0.9,
+            "wall_clock_seconds": 1117.3382482156157
+          },
+          {
+            "avg_attempts": 1.5,
+            "coding_success_rate": 1.0,
+            "condition": "6_full_some",
+            "delta_from_baseline": 0.09999999999999998,
+            "description": "Full SOME: retry + plan + heads + memory + fast weights",
+            "marginal_delta": 0.0,
+            "reasoning_success_rate": 0.8,
+            "success_rate": 0.9,
+            "wall_clock_seconds": 1116.6150411246344
+          }
+        ]
+      },
+      "conditions": {
+        "1_baseline": {
+          "condition": "1_baseline",
+          "description": "Single attempt, no SOME",
+          "summary": {
+            "avg_attempt_time_seconds": 12.491913191275671,
+            "avg_attempts": 1.0,
+            "avg_output_tokens": 1517.4,
+            "avg_tokens_per_second": 166.17858147286088,
+            "by_task": {
+              "binary_search": {
+                "avg_attempts": 1,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "factorial": {
+                "avg_attempts": 1,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "fibonacci": {
+                "avg_attempts": 1,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "is_prime": {
+                "avg_attempts": 1,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "logic_constraint": {
+                "avg_attempts": 1,
+                "runs": 4,
+                "success_rate": 0.0
+              },
+              "meeting_slot": {
+                "avg_attempts": 1,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "price_reasoning": {
+                "avg_attempts": 1,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "quick_sort": {
+                "avg_attempts": 1,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "robot_grid": {
+                "avg_attempts": 1,
+                "runs": 4,
+                "success_rate": 0.0
+              },
+              "weighted_path": {
+                "avg_attempts": 1,
+                "runs": 4,
+                "success_rate": 1.0
+              }
+            },
+            "categories": {
+              "coding": {
+                "avg_attempts": 1.0,
+                "num_samples": 20,
+                "success_rate": 1.0
+              },
+              "reasoning": {
+                "avg_attempts": 1.0,
+                "num_samples": 20,
+                "success_rate": 0.6
+              }
+            },
+            "num_samples": 40,
+            "success_rate": 0.8
+          },
+          "task_results": [
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 21.87883120123297,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 16.0577826583758,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 8.807453990913928,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 8.430603135377169,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 12.96501831524074,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 12.439460820518434,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 15.480050446465611,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 8.61966482270509,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 8.464986390434206,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 12.712195351719856,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 12.067445285618305,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 15.23884730041027,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 8.396927719935775,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 8.392378714866936,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 12.621952303685248,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 12.466139026917517,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 15.499681762419641,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 8.793157844804227,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 8.6141052627936,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 12.739848996512592,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 12.627875902689993,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 11.164559866301715,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 16.742993962019682,
+              "name": "robot_grid",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 16.162923182360828,
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 7.965300008654594,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 12.227890294976532,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 11.212585815228522,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 16.617293789982796,
+              "name": "robot_grid",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 16.531455769203603,
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 8.051216837018728,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 12.549824704416096,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 11.233566774055362,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 16.52413160726428,
+              "name": "robot_grid",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 16.61505041550845,
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 7.978972872719169,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 12.647600896656513,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 11.25088559743017,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 16.35710934177041,
+              "name": "robot_grid",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 16.403418058529496,
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 8.125340603291988,
+              "name": "price_reasoning",
+              "success": true
+            }
+          ],
+          "wall_clock_seconds": 499.6851826068014
+        },
+        "2_verify_only": {
+          "condition": "2_verify_only",
+          "description": "Retry loop (4 attempts), no planning/heads/memory/weights",
+          "summary": {
+            "avg_attempt_time_seconds": 11.637171520182164,
+            "avg_attempts": 1.6,
+            "by_task": {
+              "binary_search": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "factorial": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "fibonacci": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "is_prime": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "logic_constraint": {
+                "avg_attempts": 4.0,
+                "runs": 4,
+                "success_rate": 0.0
+              },
+              "meeting_slot": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "price_reasoning": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "quick_sort": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "robot_grid": {
+                "avg_attempts": 4.0,
+                "runs": 4,
+                "success_rate": 0.0
+              },
+              "weighted_path": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              }
+            },
+            "categories": {
+              "coding": {
+                "avg_attempts": 1.0,
+                "num_samples": 20,
+                "success_rate": 1.0
+              },
+              "reasoning": {
+                "avg_attempts": 2.2,
+                "num_samples": 20,
+                "success_rate": 0.6
+              }
+            },
+            "num_samples": 40,
+            "success_rate": 0.8
+          },
+          "task_results": [
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 12.382693901658058,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 1.820539633743465,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 3.135388223454356,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 11.790267855860293,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 3.375065241008997,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 12.565248940140009,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 1.7236507721245289,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 3.0128897950053215,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 11.883502196520567,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 3.3318123193457723,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 12.319594163447618,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 1.7343643540516496,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 2.9777237055823207,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 11.581559055484831,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 3.3769445419311523,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 12.381871305406094,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 1.6752441013231874,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 2.992220270447433,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 11.575102232396603,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 3.286814824678004,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 7.656622757203877,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 13.027748420834541,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 65.2685130527243,
+              "error": "empty response",
+              "name": "robot_grid",
+              "success": false
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 65.42240242566913,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 8.16289873700589,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 7.683468458242714,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 12.996315337717533,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 64.69458064902574,
+              "error": "empty response",
+              "name": "robot_grid",
+              "success": false
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 62.03694024588913,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 7.624203375540674,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 7.335952338762581,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 12.274009686894715,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 61.61575925163925,
+              "error": "empty response",
+              "name": "robot_grid",
+              "success": false
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 61.46055844146758,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 7.821540397591889,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 7.352800323627889,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 12.058626498095691,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 61.6646189680323,
+              "error": "empty response",
+              "name": "robot_grid",
+              "success": false
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 62.1747785564512,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 7.524141935631633,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            }
+          ],
+          "wall_clock_seconds": 744.782957252115
+        },
+        "3_verify_plan": {
+          "condition": "3_verify_plan",
+          "description": "Retry + planning, no heads/memory/weights",
+          "summary": {
+            "avg_attempt_time_seconds": 18.600478025789684,
+            "avg_attempts": 1.5,
+            "by_task": {
+              "binary_search": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "factorial": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "fibonacci": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "is_prime": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "logic_constraint": {
+                "avg_attempts": 4.0,
+                "runs": 4,
+                "success_rate": 0.0
+              },
+              "meeting_slot": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "price_reasoning": {
+                "avg_attempts": 2.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "quick_sort": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "robot_grid": {
+                "avg_attempts": 2.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "weighted_path": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              }
+            },
+            "categories": {
+              "coding": {
+                "avg_attempts": 1.0,
+                "num_samples": 20,
+                "success_rate": 1.0
+              },
+              "reasoning": {
+                "avg_attempts": 2.0,
+                "num_samples": 20,
+                "success_rate": 0.8
+              }
+            },
+            "num_samples": 40,
+            "success_rate": 0.9
+          },
+          "task_results": [
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.49448262527585,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 20.88350369501859,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.1290963916108,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.323355859145522,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 25.787825378589332,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.514060544781387,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 21.0622890740633,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.588740431703627,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.785274950787425,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 26.24217478837818,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.828787351958454,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 21.266906693577766,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.331114273518324,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.29812793713063,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 25.609157376922667,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.133144569583237,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 20.728721687570214,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.134644861333072,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.287511742673814,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 25.237380852922797,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 10.712528358213603,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 25.680180015973747,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 2,
+              "category": "reasoning",
+              "elapsed_seconds": 44.74052658956498,
+              "error": null,
+              "name": "robot_grid",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 69.49664446339011,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 2,
+              "category": "reasoning",
+              "elapsed_seconds": 25.101984640583396,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 10.900901044718921,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 26.124247546307743,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 2,
+              "category": "reasoning",
+              "elapsed_seconds": 45.97476024366915,
+              "error": null,
+              "name": "robot_grid",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 70.39252911508083,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 2,
+              "category": "reasoning",
+              "elapsed_seconds": 24.66671272739768,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 10.824501131661236,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 26.187097815796733,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 2,
+              "category": "reasoning",
+              "elapsed_seconds": 45.5947228576988,
+              "error": null,
+              "name": "robot_grid",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 70.19201019406319,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 2,
+              "category": "reasoning",
+              "elapsed_seconds": 24.163876561447978,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 10.77401370368898,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 25.796548238024116,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 2,
+              "category": "reasoning",
+              "elapsed_seconds": 45.21513789705932,
+              "error": null,
+              "name": "robot_grid",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 71.05853780452162,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 2,
+              "category": "reasoning",
+              "elapsed_seconds": 24.764919511973858,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            }
+          ],
+          "wall_clock_seconds": 1116.032813807018
+        },
+        "4_verify_plan_heads": {
+          "condition": "4_verify_plan_heads",
+          "description": "Retry + planning + learned action/halt heads",
+          "summary": {
+            "avg_attempt_time_seconds": 18.656550798829024,
+            "avg_attempts": 1.5,
+            "by_task": {
+              "binary_search": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "factorial": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "fibonacci": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "is_prime": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "logic_constraint": {
+                "avg_attempts": 4.0,
+                "runs": 4,
+                "success_rate": 0.0
+              },
+              "meeting_slot": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "price_reasoning": {
+                "avg_attempts": 2.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "quick_sort": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "robot_grid": {
+                "avg_attempts": 2.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "weighted_path": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              }
+            },
+            "categories": {
+              "coding": {
+                "avg_attempts": 1.0,
+                "num_samples": 20,
+                "success_rate": 1.0
+              },
+              "reasoning": {
+                "avg_attempts": 2.0,
+                "num_samples": 20,
+                "success_rate": 0.8
+              }
+            },
+            "num_samples": 40,
+            "success_rate": 0.9
+          },
+          "task_results": [
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 17.939588425680995,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 20.69062970764935,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.059057742357254,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.273109522648156,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 25.310833785682917,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.128139467909932,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 21.115521071478724,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.312757132574916,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.342408032156527,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 25.66332276444882,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.730140925385058,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 21.019676382653415,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.758673269301653,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.26570430956781,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 25.516226914711297,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.13863348774612,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 21.324908271431923,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.429190322756767,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.226545116864145,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 25.697128234431148,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 10.964253143407404,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 26.70108772534877,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 2,
+              "category": "reasoning",
+              "elapsed_seconds": 45.755346175283194,
+              "error": null,
+              "name": "robot_grid",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 70.1352683166042,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 2,
+              "category": "reasoning",
+              "elapsed_seconds": 24.245374094694853,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 10.643315091729164,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 26.023534449748695,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 2,
+              "category": "reasoning",
+              "elapsed_seconds": 45.82389319315553,
+              "error": null,
+              "name": "robot_grid",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 71.63853446114808,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 2,
+              "category": "reasoning",
+              "elapsed_seconds": 24.675575314089656,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 10.773101281374693,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 26.308010602369905,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 2,
+              "category": "reasoning",
+              "elapsed_seconds": 45.561422693543136,
+              "error": null,
+              "name": "robot_grid",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 71.42502933461219,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 2,
+              "category": "reasoning",
+              "elapsed_seconds": 25.013177481479943,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 10.790689341723919,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 26.495065681636333,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 2,
+              "category": "reasoning",
+              "elapsed_seconds": 44.967393974773586,
+              "error": null,
+              "name": "robot_grid",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 70.81548271514475,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 2,
+              "category": "reasoning",
+              "elapsed_seconds": 24.695297970436513,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            }
+          ],
+          "wall_clock_seconds": 1119.3972598323599
+        },
+        "5_verify_plan_heads_memory": {
+          "condition": "5_verify_plan_heads_memory",
+          "description": "Retry + planning + heads + recurrent memory",
+          "summary": {
+            "avg_attempt_time_seconds": 18.622236554324626,
+            "avg_attempts": 1.5,
+            "by_task": {
+              "binary_search": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "factorial": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "fibonacci": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "is_prime": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "logic_constraint": {
+                "avg_attempts": 4.0,
+                "runs": 4,
+                "success_rate": 0.0
+              },
+              "meeting_slot": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "price_reasoning": {
+                "avg_attempts": 2.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "quick_sort": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "robot_grid": {
+                "avg_attempts": 2.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "weighted_path": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              }
+            },
+            "categories": {
+              "coding": {
+                "avg_attempts": 1.0,
+                "num_samples": 20,
+                "success_rate": 1.0
+              },
+              "reasoning": {
+                "avg_attempts": 2.0,
+                "num_samples": 20,
+                "success_rate": 0.8
+              }
+            },
+            "num_samples": 40,
+            "success_rate": 0.9
+          },
+          "task_results": [
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.266245312988758,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 21.182402493432164,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.316256468184292,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.406016627326608,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 25.845275067724288,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.62581948004663,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 21.29280703421682,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.771998436190188,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.81158420816064,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 25.745437629520893,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.51446898560971,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 21.094281467609107,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.300990912131965,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.781213441863656,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 25.95553180295974,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.709787263534963,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 21.84485906548798,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.591143378056586,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.475496272556484,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 25.460822557099164,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 10.688997351564467,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 26.384827435947955,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 2,
+              "category": "reasoning",
+              "elapsed_seconds": 45.272508101537824,
+              "error": null,
+              "name": "robot_grid",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 69.67853112705052,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 2,
+              "category": "reasoning",
+              "elapsed_seconds": 24.464168602600694,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 10.410200444981456,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 25.96494324784726,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 2,
+              "category": "reasoning",
+              "elapsed_seconds": 45.744573429226875,
+              "error": null,
+              "name": "robot_grid",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 70.28748678043485,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 2,
+              "category": "reasoning",
+              "elapsed_seconds": 24.045948267914355,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 10.511320820078254,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 25.973139598965645,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 2,
+              "category": "reasoning",
+              "elapsed_seconds": 45.97884954791516,
+              "error": null,
+              "name": "robot_grid",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 70.9019912648946,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 2,
+              "category": "reasoning",
+              "elapsed_seconds": 24.715614840388298,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 10.501630185171962,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 25.97818838711828,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 2,
+              "category": "reasoning",
+              "elapsed_seconds": 45.246161862276495,
+              "error": null,
+              "name": "robot_grid",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 69.29198556859046,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 2,
+              "category": "reasoning",
+              "elapsed_seconds": 24.30068849027157,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            }
+          ],
+          "wall_clock_seconds": 1117.3382482156157
+        },
+        "6_full_some": {
+          "condition": "6_full_some",
+          "description": "Full SOME: retry + plan + heads + memory + fast weights",
+          "summary": {
+            "avg_attempt_time_seconds": 18.61017978033051,
+            "avg_attempts": 1.5,
+            "by_task": {
+              "binary_search": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "factorial": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "fibonacci": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "is_prime": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "logic_constraint": {
+                "avg_attempts": 4.0,
+                "runs": 4,
+                "success_rate": 0.0
+              },
+              "meeting_slot": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "price_reasoning": {
+                "avg_attempts": 2.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "quick_sort": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "robot_grid": {
+                "avg_attempts": 2.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "weighted_path": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              }
+            },
+            "categories": {
+              "coding": {
+                "avg_attempts": 1.0,
+                "num_samples": 20,
+                "success_rate": 1.0
+              },
+              "reasoning": {
+                "avg_attempts": 2.0,
+                "num_samples": 20,
+                "success_rate": 0.8
+              }
+            },
+            "num_samples": 40,
+            "success_rate": 0.9
+          },
+          "task_results": [
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.125757917761803,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 21.5192160429433,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.25556336250156,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.38886221125722,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 25.617765361443162,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.588598183356225,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 20.69669531751424,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.26272538024932,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.163156875409186,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 24.961437032558024,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.381346155889332,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 20.41695639770478,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 17.61883291322738,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.29458258114755,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 25.77529115229845,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.344780392944813,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 21.07650922331959,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.1940364446491,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.593473910354078,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 25.682922134175897,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 10.660170848481357,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 26.445078613236547,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 2,
+              "category": "reasoning",
+              "elapsed_seconds": 46.151292379014194,
+              "error": null,
+              "name": "robot_grid",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 71.10382715798914,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 2,
+              "category": "reasoning",
+              "elapsed_seconds": 24.46942876558751,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 10.689193176105618,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 25.853119033388793,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 2,
+              "category": "reasoning",
+              "elapsed_seconds": 45.06317000556737,
+              "error": null,
+              "name": "robot_grid",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 69.81965563073754,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 2,
+              "category": "reasoning",
+              "elapsed_seconds": 24.836527910083532,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 10.708317456766963,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 26.074283242225647,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 2,
+              "category": "reasoning",
+              "elapsed_seconds": 45.16368242353201,
+              "error": null,
+              "name": "robot_grid",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 70.35915306676179,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 2,
+              "category": "reasoning",
+              "elapsed_seconds": 24.66989050898701,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 10.62893408536911,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 26.385874026454985,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 2,
+              "category": "reasoning",
+              "elapsed_seconds": 46.072670300491154,
+              "error": null,
+              "name": "robot_grid",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 71.71499663684517,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 2,
+              "category": "reasoning",
+              "elapsed_seconds": 24.783012561500072,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            }
+          ],
+          "wall_clock_seconds": 1116.6150411246344
+        }
+      },
+      "model": "qwen3.5:4b",
+      "num_tasks": 40,
+      "provider": "local",
+      "repeats": 4,
+      "timestamp": "2026-03-13T02:56:35.627232+00:00"
+    },
+    "9B": {
+      "comparison": {
+        "rows": [
+          {
+            "avg_attempts": 1.0,
+            "coding_success_rate": 0.8,
+            "condition": "1_baseline",
+            "delta_from_baseline": 0.0,
+            "description": "Single attempt, no SOME",
+            "marginal_delta": 0.0,
+            "reasoning_success_rate": 0.6,
+            "success_rate": 0.7,
+            "wall_clock_seconds": 563.9672856386751
+          },
+          {
+            "avg_attempts": 1.6,
+            "coding_success_rate": 1.0,
+            "condition": "2_verify_only",
+            "delta_from_baseline": 0.10000000000000009,
+            "description": "Retry loop (4 attempts), no planning/heads/memory/weights",
+            "marginal_delta": 0.10000000000000009,
+            "reasoning_success_rate": 0.6,
+            "success_rate": 0.8,
+            "wall_clock_seconds": 900.7343983892351
+          },
+          {
+            "avg_attempts": 1.7,
+            "coding_success_rate": 1.0,
+            "condition": "3_verify_plan",
+            "delta_from_baseline": 0.10000000000000009,
+            "description": "Retry + planning, no heads/memory/weights",
+            "marginal_delta": 0.0,
+            "reasoning_success_rate": 0.6,
+            "success_rate": 0.8,
+            "wall_clock_seconds": 1479.7868292685598
+          },
+          {
+            "avg_attempts": 1.7,
+            "coding_success_rate": 1.0,
+            "condition": "4_verify_plan_heads",
+            "delta_from_baseline": 0.10000000000000009,
+            "description": "Retry + planning + learned action/halt heads",
+            "marginal_delta": 0.0,
+            "reasoning_success_rate": 0.6,
+            "success_rate": 0.8,
+            "wall_clock_seconds": 1471.754687005654
+          },
+          {
+            "avg_attempts": 1.7,
+            "coding_success_rate": 1.0,
+            "condition": "5_verify_plan_heads_memory",
+            "delta_from_baseline": 0.10000000000000009,
+            "description": "Retry + planning + heads + recurrent memory",
+            "marginal_delta": 0.0,
+            "reasoning_success_rate": 0.6,
+            "success_rate": 0.8,
+            "wall_clock_seconds": 1465.8600806277245
+          },
+          {
+            "avg_attempts": 1.7,
+            "coding_success_rate": 1.0,
+            "condition": "6_full_some",
+            "delta_from_baseline": 0.10000000000000009,
+            "description": "Full SOME: retry + plan + heads + memory + fast weights",
+            "marginal_delta": 0.0,
+            "reasoning_success_rate": 0.6,
+            "success_rate": 0.8,
+            "wall_clock_seconds": 1464.857720689848
+          }
+        ]
+      },
+      "conditions": {
+        "1_baseline": {
+          "condition": "1_baseline",
+          "description": "Single attempt, no SOME",
+          "summary": {
+            "avg_attempt_time_seconds": 14.098992473213002,
+            "avg_attempts": 1.0,
+            "avg_output_tokens": 1615.2,
+            "avg_tokens_per_second": 153.25508138619287,
+            "by_task": {
+              "binary_search": {
+                "avg_attempts": 1,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "factorial": {
+                "avg_attempts": 1,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "fibonacci": {
+                "avg_attempts": 1,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "is_prime": {
+                "avg_attempts": 1,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "logic_constraint": {
+                "avg_attempts": 1,
+                "runs": 4,
+                "success_rate": 0.0
+              },
+              "meeting_slot": {
+                "avg_attempts": 1,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "price_reasoning": {
+                "avg_attempts": 1,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "quick_sort": {
+                "avg_attempts": 1,
+                "runs": 4,
+                "success_rate": 0.0
+              },
+              "robot_grid": {
+                "avg_attempts": 1,
+                "runs": 4,
+                "success_rate": 0.0
+              },
+              "weighted_path": {
+                "avg_attempts": 1,
+                "runs": 4,
+                "success_rate": 1.0
+              }
+            },
+            "categories": {
+              "coding": {
+                "avg_attempts": 1.0,
+                "num_samples": 20,
+                "success_rate": 0.8
+              },
+              "reasoning": {
+                "avg_attempts": 1.0,
+                "num_samples": 20,
+                "success_rate": 0.6
+              }
+            },
+            "num_samples": 40,
+            "success_rate": 0.7
+          },
+          "task_results": [
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 22.48212542105466,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 17.595606456510723,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 8.700907862745225,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 8.96533938497305,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 17.628783990629017,
+              "name": "quick_sort",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 13.168052370660007,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 16.96308836247772,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 8.243864794261754,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 8.877015181817114,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 17.769789721816778,
+              "name": "quick_sort",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 13.217011267319322,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 16.90288188122213,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 8.282258220016956,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 8.62553990073502,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 17.338912283070385,
+              "name": "quick_sort",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 12.868901225738227,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 16.858912331052125,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 8.30751762446016,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 8.907448736019433,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 18.083018659614027,
+              "name": "quick_sort",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 13.892477576620877,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 10.573895344510674,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 17.592647810466588,
+              "name": "robot_grid",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 17.509325657971203,
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 13.980929308570921,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 13.792066686786711,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 10.420842458494008,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 17.15330664999783,
+              "name": "robot_grid",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 17.481678852811456,
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 14.598609765060246,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 13.437928276136518,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 10.215218555182219,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 17.448918959125876,
+              "name": "robot_grid",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 17.485387796536088,
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 14.402783895842731,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 14.077853963710368,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 10.556225892156363,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 17.646881826221943,
+              "name": "robot_grid",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 17.384798927232623,
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 14.520945048891008,
+              "name": "price_reasoning",
+              "success": true
+            }
+          ],
+          "wall_clock_seconds": 563.9672856386751
+        },
+        "2_verify_only": {
+          "condition": "2_verify_only",
+          "description": "Retry loop (4 attempts), no planning/heads/memory/weights",
+          "summary": {
+            "avg_attempt_time_seconds": 14.073915056622354,
+            "avg_attempts": 1.6,
+            "by_task": {
+              "binary_search": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "factorial": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "fibonacci": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "is_prime": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "logic_constraint": {
+                "avg_attempts": 4.0,
+                "runs": 4,
+                "success_rate": 0.0
+              },
+              "meeting_slot": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "price_reasoning": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "quick_sort": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "robot_grid": {
+                "avg_attempts": 4.0,
+                "runs": 4,
+                "success_rate": 0.0
+              },
+              "weighted_path": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              }
+            },
+            "categories": {
+              "coding": {
+                "avg_attempts": 1.0,
+                "num_samples": 20,
+                "success_rate": 1.0
+              },
+              "reasoning": {
+                "avg_attempts": 2.2,
+                "num_samples": 20,
+                "success_rate": 0.6
+              }
+            },
+            "num_samples": 40,
+            "success_rate": 0.8
+          },
+          "task_results": [
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 15.507713423110545,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 14.394204792566597,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 7.820460828952491,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 7.227855612523854,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 9.013154753483832,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 15.357141585089266,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 14.352704810909927,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 7.686552873812616,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 7.101121924817562,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 9.00400074198842,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 15.652435896918178,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 14.580873723141849,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 7.72046990133822,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 7.204493065364659,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 9.122164614498615,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 15.427747953683138,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 14.355534021742642,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 7.613612835295498,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 6.973690384998918,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 8.805002375505865,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 9.012457358650863,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 12.37571141216904,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 69.65427143219858,
+              "error": "empty response",
+              "name": "robot_grid",
+              "success": false
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 68.75188265461475,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 11.080911588855088,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 9.176398595795035,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 12.449536898173392,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 69.13072028942406,
+              "error": "empty response",
+              "name": "robot_grid",
+              "success": false
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 69.8854482844472,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 10.98217642493546,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 9.168385032564402,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 12.573521782644093,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 68.57249092496932,
+              "error": "empty response",
+              "name": "robot_grid",
+              "success": false
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 69.88017696607858,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 10.985052620060742,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 9.251012145541608,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 12.4383316738531,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 68.98482695035636,
+              "error": "empty response",
+              "name": "robot_grid",
+              "success": false
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 70.43577684555203,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 11.02053762320429,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            }
+          ],
+          "wall_clock_seconds": 900.7343983892351
+        },
+        "3_verify_plan": {
+          "condition": "3_verify_plan",
+          "description": "Retry + planning, no heads/memory/weights",
+          "summary": {
+            "avg_attempt_time_seconds": 21.76152143856127,
+            "avg_attempts": 1.7,
+            "by_task": {
+              "binary_search": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "factorial": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "fibonacci": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "is_prime": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "logic_constraint": {
+                "avg_attempts": 4.0,
+                "runs": 4,
+                "success_rate": 0.0
+              },
+              "meeting_slot": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "price_reasoning": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "quick_sort": {
+                "avg_attempts": 2.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "robot_grid": {
+                "avg_attempts": 4.0,
+                "runs": 4,
+                "success_rate": 0.0
+              },
+              "weighted_path": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              }
+            },
+            "categories": {
+              "coding": {
+                "avg_attempts": 1.2,
+                "num_samples": 20,
+                "success_rate": 1.0
+              },
+              "reasoning": {
+                "avg_attempts": 2.2,
+                "num_samples": 20,
+                "success_rate": 0.6
+              }
+            },
+            "num_samples": 40,
+            "success_rate": 0.8
+          },
+          "task_results": [
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 25.6395366769284,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 24.192676397040486,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 19.460804710164666,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 23.48566452227533,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 2,
+              "category": "coding",
+              "elapsed_seconds": 24.921980685554445,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 25.807241016998887,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 23.987898108549416,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 19.288053224794567,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 23.531812155619264,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 2,
+              "category": "coding",
+              "elapsed_seconds": 24.425363034941256,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 25.24422211293131,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 23.54681017063558,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 19.258791422471404,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 23.83302086405456,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 2,
+              "category": "coding",
+              "elapsed_seconds": 24.226583836600184,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 25.031906735152006,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 23.6650249119848,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 19.647469595074654,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 23.596288461238146,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 2,
+              "category": "coding",
+              "elapsed_seconds": 24.359512642025948,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 25.97931236680597,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 27.604489393532276,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 79.62031785678118,
+              "error": "empty response",
+              "name": "robot_grid",
+              "success": false
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 87.47956003248692,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 31.297696750611067,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 25.626588620245457,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 27.05552325118333,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 79.89512498117983,
+              "error": "empty response",
+              "name": "robot_grid",
+              "success": false
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 90.15026399865746,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 32.024534322321415,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 26.382653957232833,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 28.263549805618823,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 79.9578307569027,
+              "error": "empty response",
+              "name": "robot_grid",
+              "success": false
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 87.8564886962995,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 31.615848344750702,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 25.838456073775887,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 27.47738255839795,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 79.5031342850998,
+              "error": "empty response",
+              "name": "robot_grid",
+              "success": false
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 87.73853039834648,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 31.265510086901486,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            }
+          ],
+          "wall_clock_seconds": 1479.7868292685598
+        },
+        "4_verify_plan_heads": {
+          "condition": "4_verify_plan_heads",
+          "description": "Retry + planning + learned action/halt heads",
+          "summary": {
+            "avg_attempt_time_seconds": 21.64340107707197,
+            "avg_attempts": 1.7,
+            "by_task": {
+              "binary_search": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "factorial": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "fibonacci": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "is_prime": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "logic_constraint": {
+                "avg_attempts": 4.0,
+                "runs": 4,
+                "success_rate": 0.0
+              },
+              "meeting_slot": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "price_reasoning": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "quick_sort": {
+                "avg_attempts": 2.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "robot_grid": {
+                "avg_attempts": 4.0,
+                "runs": 4,
+                "success_rate": 0.0
+              },
+              "weighted_path": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              }
+            },
+            "categories": {
+              "coding": {
+                "avg_attempts": 1.2,
+                "num_samples": 20,
+                "success_rate": 1.0
+              },
+              "reasoning": {
+                "avg_attempts": 2.2,
+                "num_samples": 20,
+                "success_rate": 0.6
+              }
+            },
+            "num_samples": 40,
+            "success_rate": 0.8
+          },
+          "task_results": [
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 25.405768375843763,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 23.745452469214797,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 19.14680032338947,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 23.30174495652318,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 2,
+              "category": "coding",
+              "elapsed_seconds": 24.676765501499176,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 25.66805840935558,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 24.21836665738374,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 19.631426110863686,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 23.748217111453414,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 2,
+              "category": "coding",
+              "elapsed_seconds": 24.726874247193336,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 25.383316327817738,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 24.098616521805525,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 19.066928618587554,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 23.449611579999328,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 2,
+              "category": "coding",
+              "elapsed_seconds": 24.452754662372172,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 25.308582501485944,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 23.75802405923605,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 19.326675695367157,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 23.34911647439003,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 2,
+              "category": "coding",
+              "elapsed_seconds": 24.344477909617126,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 25.325798854231834,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 27.803836724720895,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 79.34418058302253,
+              "error": "empty response",
+              "name": "robot_grid",
+              "success": false
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 86.73741883970797,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 31.39690558705479,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 25.620664900168777,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 26.657455602660775,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 79.21990786772221,
+              "error": "empty response",
+              "name": "robot_grid",
+              "success": false
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 88.50964651908726,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 31.4866133434698,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 25.902162346057594,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 27.07046245224774,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 79.25804639887065,
+              "error": "empty response",
+              "name": "robot_grid",
+              "success": false
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 88.20969262626022,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 31.664010028354824,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 25.768776490353048,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 27.11153370887041,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 78.35359245259315,
+              "error": "empty response",
+              "name": "robot_grid",
+              "success": false
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 87.75956766493618,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 31.743421737104654,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            }
+          ],
+          "wall_clock_seconds": 1471.754687005654
+        },
+        "5_verify_plan_heads_memory": {
+          "condition": "5_verify_plan_heads_memory",
+          "description": "Retry + planning + heads + recurrent memory",
+          "summary": {
+            "avg_attempt_time_seconds": 21.556715768898894,
+            "avg_attempts": 1.7,
+            "by_task": {
+              "binary_search": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "factorial": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "fibonacci": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "is_prime": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "logic_constraint": {
+                "avg_attempts": 4.0,
+                "runs": 4,
+                "success_rate": 0.0
+              },
+              "meeting_slot": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "price_reasoning": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "quick_sort": {
+                "avg_attempts": 2.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "robot_grid": {
+                "avg_attempts": 4.0,
+                "runs": 4,
+                "success_rate": 0.0
+              },
+              "weighted_path": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              }
+            },
+            "categories": {
+              "coding": {
+                "avg_attempts": 1.2,
+                "num_samples": 20,
+                "success_rate": 1.0
+              },
+              "reasoning": {
+                "avg_attempts": 2.2,
+                "num_samples": 20,
+                "success_rate": 0.6
+              }
+            },
+            "num_samples": 40,
+            "success_rate": 0.8
+          },
+          "task_results": [
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 25.586232484318316,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 23.80719947628677,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 19.077970179729164,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 23.299024275504053,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 2,
+              "category": "coding",
+              "elapsed_seconds": 24.41181818395853,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 25.10003578942269,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 23.654961952008307,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 19.118117727339268,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 23.54055928066373,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 2,
+              "category": "coding",
+              "elapsed_seconds": 24.624936079606414,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 25.45885607227683,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 23.7898312471807,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 19.468744315207005,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 23.27554042637348,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 2,
+              "category": "coding",
+              "elapsed_seconds": 24.25055336765945,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 25.61123269610107,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 23.307534783147275,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 19.358673065900803,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 23.560775709338486,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 2,
+              "category": "coding",
+              "elapsed_seconds": 24.56769661884755,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 25.531198007054627,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 27.134735241532326,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 79.32349030207843,
+              "error": "empty response",
+              "name": "robot_grid",
+              "success": false
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 86.38999518286437,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 31.390039226971567,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 25.180503892712295,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 26.81375005096197,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 79.04083867464215,
+              "error": "empty response",
+              "name": "robot_grid",
+              "success": false
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 87.34972162544727,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 31.69032199587673,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 25.778756510466337,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 27.71580784395337,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 78.7476564804092,
+              "error": "empty response",
+              "name": "robot_grid",
+              "success": false
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 87.41412178892642,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 31.383041634224355,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 25.565767436288297,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 27.101226965896785,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 79.16029269527644,
+              "error": "empty response",
+              "name": "robot_grid",
+              "success": false
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 86.43165683094412,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 31.84345616772771,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            }
+          ],
+          "wall_clock_seconds": 1465.8600806277245
+        },
+        "6_full_some": {
+          "condition": "6_full_some",
+          "description": "Full SOME: retry + plan + heads + memory + fast weights",
+          "summary": {
+            "avg_attempt_time_seconds": 21.54197500416023,
+            "avg_attempts": 1.7,
+            "by_task": {
+              "binary_search": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "factorial": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "fibonacci": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "is_prime": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "logic_constraint": {
+                "avg_attempts": 4.0,
+                "runs": 4,
+                "success_rate": 0.0
+              },
+              "meeting_slot": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "price_reasoning": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "quick_sort": {
+                "avg_attempts": 2.0,
+                "runs": 4,
+                "success_rate": 1.0
+              },
+              "robot_grid": {
+                "avg_attempts": 4.0,
+                "runs": 4,
+                "success_rate": 0.0
+              },
+              "weighted_path": {
+                "avg_attempts": 1.0,
+                "runs": 4,
+                "success_rate": 1.0
+              }
+            },
+            "categories": {
+              "coding": {
+                "avg_attempts": 1.2,
+                "num_samples": 20,
+                "success_rate": 1.0
+              },
+              "reasoning": {
+                "avg_attempts": 2.2,
+                "num_samples": 20,
+                "success_rate": 0.6
+              }
+            },
+            "num_samples": 40,
+            "success_rate": 0.8
+          },
+          "task_results": [
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 25.396561857312918,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 23.92007959075272,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 19.53447843529284,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 23.59963475074619,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 2,
+              "category": "coding",
+              "elapsed_seconds": 24.58853099308908,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 25.609588028863072,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 23.769542866386473,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 19.62343544792384,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 23.402608439326286,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 2,
+              "category": "coding",
+              "elapsed_seconds": 24.299963330850005,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 25.086140980944037,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 23.63463376276195,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 19.307337558828294,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 23.639745532535017,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 2,
+              "category": "coding",
+              "elapsed_seconds": 24.431769649498165,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 25.496573207899928,
+              "error": null,
+              "name": "fibonacci",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 23.842923165299,
+              "error": null,
+              "name": "factorial",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 19.41822261363268,
+              "error": null,
+              "name": "is_prime",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "coding",
+              "elapsed_seconds": 23.711110810749233,
+              "error": null,
+              "name": "binary_search",
+              "success": true
+            },
+            {
+              "attempts": 2,
+              "category": "coding",
+              "elapsed_seconds": 24.682020002044737,
+              "error": null,
+              "name": "quick_sort",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 25.672011902555823,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 26.810696157626808,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 78.70144931226969,
+              "error": "empty response",
+              "name": "robot_grid",
+              "success": false
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 87.0987610751763,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 30.7992220018059,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 25.899369714781642,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 27.610710219480097,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 79.48773443885148,
+              "error": "empty response",
+              "name": "robot_grid",
+              "success": false
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 87.2365438118577,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 31.423266240395606,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 25.867062928155065,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 27.439436295069754,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 79.20017590746284,
+              "error": "empty response",
+              "name": "robot_grid",
+              "success": false
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 87.12636475544423,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 30.968059649690986,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 25.40611895825714,
+              "error": null,
+              "name": "weighted_path",
+              "success": true
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 26.579357541166246,
+              "error": null,
+              "name": "meeting_slot",
+              "success": true
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 77.6802039835602,
+              "error": "empty response",
+              "name": "robot_grid",
+              "success": false
+            },
+            {
+              "attempts": 4,
+              "category": "reasoning",
+              "elapsed_seconds": 86.06652346905321,
+              "error": "empty response",
+              "name": "logic_constraint",
+              "success": false
+            },
+            {
+              "attempts": 1,
+              "category": "reasoning",
+              "elapsed_seconds": 30.786330895498395,
+              "error": null,
+              "name": "price_reasoning",
+              "success": true
+            }
+          ],
+          "wall_clock_seconds": 1464.857720689848
+        }
+      },
+      "model": "qwen3.5:9b",
+      "num_tasks": 40,
+      "provider": "local",
+      "repeats": 4,
+      "timestamp": "2026-03-13T05:03:06.675744+00:00"
+    }
+  },
+  "analysis": {
+    "model_count": 2,
+    "conditions": [
+      "1_baseline",
+      "2_verify_only",
+      "3_verify_plan",
+      "4_verify_plan_heads",
+      "5_verify_plan_heads_memory",
+      "6_full_some"
+    ],
+    "component_labels": {
+      "2_verify_only": "Verify/Retry Loop",
+      "3_verify_plan": "Planning Step",
+      "4_verify_plan_heads": "Learned Heads",
+      "5_verify_plan_heads_memory": "Recurrent Memory",
+      "6_full_some": "Fast Weights"
+    }
+  }
+}

@@ -229,9 +229,9 @@ def run_condition(
             task_results.append({
                 "name": tr["name"],
                 "category": tr["category"],
-                "success": tr["task_result"]["success"],
+                "success": tr["success"],
                 "attempts": 1,
-                "elapsed_seconds": tr["task_result"].get("elapsed_seconds", 0.0),
+                "elapsed_seconds": tr.get("elapsed_seconds", 0.0),
             })
         condition_result = {
             "condition": condition_name,
